@@ -4,8 +4,8 @@ import Math;
 import Random;
 import TwoCansAlpha4;
 
-const X_RES = 480;
-const Y_RES = 480;
+const X_RES = $var["screen_width"];
+const Y_RES = $var["screen_height"];
 
 const LATERAL_ACCELERATION = 0.01;
 const LATERAL_DRAG = 0.9;
@@ -16,7 +16,7 @@ const MAX_Z = 10.0;
 const SHIP_HALF_WIDTH = 0.2;
 const SHIP_HALF_HEIGHT = 0.1;
 const SHIP_LENGTH = 0.4;
-const TILT_FACTOR = 2.0;
+const TILT_FACTOR = 3.0;
 
 const SHIP_MIN_X = -1.0 + SHIP_HALF_WIDTH;
 const SHIP_MAX_X = 1.0 - SHIP_HALF_WIDTH;
