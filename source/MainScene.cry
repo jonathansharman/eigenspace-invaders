@@ -11,15 +11,12 @@ const LATERAL_ACCELERATION = 0.01;
 const LATERAL_DRAG = 0.9;
 const LONGITUDINAL_SPEED = 0.01;
 
+const MAX_Z = 10.0;
+
 const SHIP_HALF_WIDTH = 0.2;
 const SHIP_HALF_HEIGHT = 0.1;
 const SHIP_LENGTH = 0.4;
 const TILT_FACTOR = 2.0;
-
-const LASER_LENGTH = 0.4;
-const LASER_SPEED = 0.1;
-const LASER_COOLDOWN = 4;
-const LASER_MAX_Z = 10.0;
 
 const SHIP_MIN_X = -1.0 + SHIP_HALF_WIDTH;
 const SHIP_MAX_X = 1.0 - SHIP_HALF_WIDTH;
@@ -28,6 +25,30 @@ const SHIP_MAX_Y = 1.0 - SHIP_HALF_HEIGHT;
 const SHIP_MIN_Z = 1.0;
 const SHIP_MAX_Z = 2.0;
 
+const LASER_LENGTH = 0.4;
+const LASER_SPEED = 0.1;
+const LASER_COOLDOWN = 15;
+
+const ENEMY_RADIUS = 0.2;
+const ENEMY_HALF_LENGTH = 0.2;
+const ENEMY_SPEED = 0.05;
+const ENEMY_COOLDOWN = 50;
+
+const ENEMY_MIN_X = -1.0 + ENEMY_RADIUS;
+const ENEMY_MAX_X = 1.0 - ENEMY_RADIUS;
+const ENEMY_MIN_Y = -1.0 + ENEMY_RADIUS;
+const ENEMY_MAX_Y = 1.0 - ENEMY_RADIUS;
+const ENEMY_MAX_OMEGA = 0.3;
+
+class Enemy {
+	field pos;
+	field omega;
+
+	constructor(pos, omega) {
+		this.pos = pos;
+		this.omega = omega;
+	}
+}
 
 class MainScene : AbstractScene {
 	field time = 0;
@@ -35,6 +56,8 @@ class MainScene : AbstractScene {
 	field vel = [0.0, 0.0, 0.0];
 	field laserCooldown = 0;
 	field lasers = [];
+	field enemyCooldown = 0;
+	field enemies = [];
 
 	field farTopLeft;
 	field farTopRight;
@@ -42,10 +65,10 @@ class MainScene : AbstractScene {
 	field farBottomRight;
 
 	constructor() {
-		farTopLeft = [SHIP_MIN_X, SHIP_MAX_Y, LASER_MAX_Z];
-		farTopRight = [SHIP_MAX_X, SHIP_MAX_Y, LASER_MAX_Z];
-		farBottomLeft = [SHIP_MIN_X, SHIP_MIN_Y, LASER_MAX_Z];
-		farBottomRight = [SHIP_MAX_X, SHIP_MIN_Y, LASER_MAX_Z];
+		farTopLeft = [-1.0, 1.0, MAX_Z];
+		farTopRight = [1.0, 1.0, MAX_Z];
+		farBottomLeft = [-1.0, -1.0, MAX_Z];
+		farBottomRight = [1.0, -1.0, MAX_Z];
 		this.farTopLeft = this.project(farTopLeft);
 		this.farTopRight = this.project(farTopRight);
 		this.farBottomLeft = this.project(farBottomLeft);
@@ -56,6 +79,9 @@ class MainScene : AbstractScene {
 		++this.time;
 		if (this.laserCooldown > 0) {
 			--this.laserCooldown;
+		}
+		if (this.enemyCooldown > 0) {
+			--this.enemyCooldown;
 		}
 		// Move.
 		if (inputManager.isKeyPressed(KeyboardKey.RIGHT)) {
@@ -108,8 +134,16 @@ class MainScene : AbstractScene {
 		// Update laser positions.
 		for (i = 0; i < this.lasers.length; ++i) {
 			this.lasers[i][2] += LASER_SPEED;
-			if (this.lasers[i][2] > LASER_MAX_Z) {
+			if (this.lasers[i][2] > MAX_Z) {
 				this.lasers.remove(i);
+				--i;
+			}
+		}
+		// Update enemy positions.
+		for (i = 0; i < this.enemies.length; ++i) {
+			this.enemies[i].pos[2] -= ENEMY_SPEED;
+			if (this.enemies[i].pos[2] < 1.0) {
+				this.enemies.remove(i);
 				--i;
 			}
 		}
@@ -118,6 +152,16 @@ class MainScene : AbstractScene {
 			this.lasers.add([this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
 			this.lasers.add([this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
 			this.laserCooldown = LASER_COOLDOWN;
+		}
+		// Spawn enemies.
+		if (this.enemyCooldown == 0) {
+			pos =
+				[ ENEMY_MIN_X + Random.randomFloat() * (ENEMY_MAX_X - ENEMY_MIN_X)
+				, ENEMY_MIN_Y + Random.randomFloat() * (ENEMY_MAX_Y - ENEMY_MIN_Y)
+				, MAX_Z
+				];
+			this.enemies.add(new Enemy(pos, ENEMY_MAX_OMEGA * (1.0 - 2.0 * Random.randomFloat())));
+			this.enemyCooldown = ENEMY_COOLDOWN;
 		}
 	}
 
@@ -165,6 +209,33 @@ class MainScene : AbstractScene {
 		// Draw lasers.
 		for (pos : this.lasers) {
 			this.drawLine(this.project(pos), this.project([pos[0], pos[1], pos[2] + LASER_LENGTH]));
+		}
+
+		// Draw enemies.
+		for (enemy : this.enemies) {
+			pos = enemy.pos;
+			cosT = Math.cos(this.time * enemy.omega);
+			sinT = Math.sin(this.time * enemy.omega);
+			cosT90 = Math.cos(this.time * enemy.omega + 0.5 * Math.PI);
+			sinT90 = Math.sin(this.time * enemy.omega + 0.5 * Math.PI);
+			left = this.project([pos[0] - ENEMY_RADIUS * cosT, pos[1] - ENEMY_RADIUS * sinT, pos[2]]);
+			right = this.project([pos[0] + ENEMY_RADIUS * cosT, pos[1] + ENEMY_RADIUS * sinT, pos[2]]);
+			top = this.project([pos[0] + ENEMY_RADIUS * cosT90, pos[1] + ENEMY_RADIUS * sinT90, pos[2]]);
+			bottom = this.project([pos[0] - ENEMY_RADIUS * cosT90, pos[1] - ENEMY_RADIUS * sinT90, pos[2]]);
+			front = this.project([pos[0], pos[1], pos[2] - ENEMY_HALF_LENGTH]);
+			back = this.project([pos[0], pos[1], pos[2] + ENEMY_HALF_LENGTH]);
+			this.drawLine(left, top);
+			this.drawLine(top, right);
+			this.drawLine(right, bottom);
+			this.drawLine(bottom, left);
+			this.drawLine(left, front);
+			this.drawLine(top, front);
+			this.drawLine(right, front);
+			this.drawLine(bottom, front);
+			this.drawLine(left, back);
+			this.drawLine(top, back);
+			this.drawLine(right, back);
+			this.drawLine(bottom, back);
 		}
 
 		// Draw box around world.
