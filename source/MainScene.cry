@@ -1,0 +1,180 @@
+import Graphics2D;
+import Graphics2DText;
+import Math;
+import Random;
+import TwoCansAlpha4;
+
+const X_RES = 480;
+const Y_RES = 480;
+
+const LATERAL_ACCELERATION = 0.01;
+const LATERAL_DRAG = 0.9;
+const LONGITUDINAL_SPEED = 0.01;
+
+const SHIP_HALF_WIDTH = 0.2;
+const SHIP_HALF_HEIGHT = 0.1;
+const SHIP_LENGTH = 0.4;
+const TILT_FACTOR = 2.0;
+
+const LASER_LENGTH = 0.4;
+const LASER_SPEED = 0.1;
+const LASER_COOLDOWN = 4;
+const LASER_MAX_Z = 10.0;
+
+const SHIP_MIN_X = -1.0 + SHIP_HALF_WIDTH;
+const SHIP_MAX_X = 1.0 - SHIP_HALF_WIDTH;
+const SHIP_MIN_Y = -1.0 + SHIP_HALF_HEIGHT;
+const SHIP_MAX_Y = 1.0 - SHIP_HALF_HEIGHT;
+const SHIP_MIN_Z = 1.0;
+const SHIP_MAX_Z = 2.0;
+
+
+class MainScene : AbstractScene {
+	field time = 0;
+	field pos = [0.0, -0.5, 1.0];
+	field vel = [0.0, 0.0, 0.0];
+	field laserCooldown = 0;
+	field lasers = [];
+
+	field farTopLeft;
+	field farTopRight;
+	field farBottomLeft;
+	field farBottomRight;
+
+	constructor() {
+		farTopLeft = [SHIP_MIN_X, SHIP_MAX_Y, LASER_MAX_Z];
+		farTopRight = [SHIP_MAX_X, SHIP_MAX_Y, LASER_MAX_Z];
+		farBottomLeft = [SHIP_MIN_X, SHIP_MIN_Y, LASER_MAX_Z];
+		farBottomRight = [SHIP_MAX_X, SHIP_MIN_Y, LASER_MAX_Z];
+		this.farTopLeft = this.project(farTopLeft);
+		this.farTopRight = this.project(farTopRight);
+		this.farBottomLeft = this.project(farBottomLeft);
+		this.farBottomRight = this.project(farBottomRight);
+	}
+
+	function update(inputManager, events) {
+		++this.time;
+		if (this.laserCooldown > 0) {
+			--this.laserCooldown;
+		}
+		// Move.
+		if (inputManager.isKeyPressed(KeyboardKey.RIGHT)) {
+			this.vel[0] += LATERAL_ACCELERATION;
+		}
+		if (inputManager.isKeyPressed(KeyboardKey.LEFT)) {
+			this.vel[0] -= LATERAL_ACCELERATION;
+		}
+		if (inputManager.isKeyPressed(KeyboardKey.UP)) {
+			this.vel[1] += LATERAL_ACCELERATION;
+		}
+		if (inputManager.isKeyPressed(KeyboardKey.DOWN)) {
+			this.vel[1] -= LATERAL_ACCELERATION;
+		}
+		if (inputManager.isKeyPressed(KeyboardKey.Q)) {
+			this.vel[2] += LONGITUDINAL_SPEED;
+		}
+		if (inputManager.isKeyPressed(KeyboardKey.A)) {
+			this.vel[2] -= LONGITUDINAL_SPEED;
+		}
+		// Update position according to velocity.
+		this.pos[0] += this.vel[0];
+		this.pos[1] += this.vel[1];
+		this.pos[2] += this.vel[2];
+		// Apply drag.
+		this.vel[0] *= LATERAL_DRAG;
+		this.vel[1] *= LATERAL_DRAG;
+		// Keep the ship in bounds.
+		if (this.pos[0] < SHIP_MIN_X) {
+			this.pos[0] = SHIP_MIN_X;
+			this.vel[0] = 0.0;
+		} else if (this.pos[0] > SHIP_MAX_X) {
+			this.pos[0] = SHIP_MAX_X;
+			this.vel[0] = 0.0;
+		}
+		if (this.pos[1] < SHIP_MIN_Y) {
+			this.pos[1] = SHIP_MIN_Y;
+			this.vel[1] = 0.0;
+		} else if (this.pos[1] > SHIP_MAX_Y) {
+			this.pos[1] = SHIP_MAX_Y;
+			this.vel[1] = 0.0;
+		}
+		if (this.pos[2] < SHIP_MIN_Z) {
+			this.pos[2] = 1.0;
+			this.vel[2] = 0.0;
+		} else if (this.pos[2] > SHIP_MAX_Z) {
+			this.pos[2] = SHIP_MAX_Z;
+			this.vel[2] = 0.0;
+		}
+		// Update laser positions.
+		for (i = 0; i < this.lasers.length; ++i) {
+			this.lasers[i][2] += LASER_SPEED;
+			if (this.lasers[i][2] > LASER_MAX_Z) {
+				this.lasers.remove(i);
+				--i;
+			}
+		}
+		// Shoot lasers.
+		if (this.laserCooldown == 0 && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
+			this.lasers.add([this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
+			this.lasers.add([this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
+			this.laserCooldown = LASER_COOLDOWN;
+		}
+	}
+
+	// Projects a 3D point [x, y, z] into screen space.
+	function project(p) {
+		return
+			[ 0.5 * X_RES * (p[0] / p[2] + 1)
+			, 0.5 * Y_RES * (p[1] / -p[2] + 1)
+			];
+	}
+
+	function drawLine(p1, p2) {
+		Graphics2D.Draw.line
+			( p1[0]
+			, p1[1]
+			, p2[0]
+			, p2[1]
+			, 2
+			, 0, 192, 0
+			);
+	}
+
+	function render() {
+		Graphics2D.Draw.fill(0, 0, 0);
+
+		// Draw spaceship.
+		left = this.project([this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
+		right = this.project([this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
+		top = this.project([this.pos[0], this.pos[1] + SHIP_HALF_HEIGHT, this.pos[2]]);
+		bottom = this.project([this.pos[0], this.pos[1] - SHIP_HALF_HEIGHT, this.pos[2]]);
+		front = this.project(
+			[ this.pos[0] + TILT_FACTOR * this.vel[0]
+			, this.pos[1] + TILT_FACTOR * this.vel[1]
+			, this.pos[2] + SHIP_LENGTH
+			]);
+		this.drawLine(left, top);
+		this.drawLine(top, right);
+		this.drawLine(right, bottom);
+		this.drawLine(bottom, left);
+		this.drawLine(left, front);
+		this.drawLine(right, front);
+		this.drawLine(top, front);
+		this.drawLine(bottom, front);
+
+		// Draw lasers.
+		for (pos : this.lasers) {
+			this.drawLine(this.project(pos), this.project([pos[0], pos[1], pos[2] + LASER_LENGTH]));
+		}
+
+		// Draw box around world.
+		this.drawLine([0.0, 0.0], this.farTopLeft);
+		this.drawLine([X_RES, 0.0], this.farTopRight);
+		this.drawLine([0.0, Y_RES], this.farBottomLeft);
+		this.drawLine([X_RES, Y_RES], this.farBottomRight);
+		this.drawLine(this.farTopLeft, this.farTopRight);
+		this.drawLine(this.farTopRight, this.farBottomRight);
+		this.drawLine(this.farBottomRight, this.farBottomLeft);
+		this.drawLine(this.farBottomLeft, this.farTopLeft);
+	}
+}
