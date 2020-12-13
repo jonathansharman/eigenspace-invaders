@@ -1,3 +1,4 @@
+import Audio;
 import Graphics2D;
 import Graphics2DText;
 import Math;
@@ -51,6 +52,21 @@ class Enemy {
 }
 
 class MainScene : AbstractScene {
+	static field farTopLeft;
+	static field farTopRight;
+	static field farBottomLeft;
+	static field farBottomRight;
+
+	static field laserSound = Audio.SoundResource.loadFromResource("laser.ogg");
+
+	static constructor() {
+		MainScene.farTopLeft = ## project # [-1.0, 1.0, MAX_Z] ##;
+		MainScene.farTopRight = ## project # [1.0, 1.0, MAX_Z] ##;
+		MainScene.farBottomLeft = ## project # [-1.0, -1.0, MAX_Z] ##;
+		MainScene.farBottomRight = ## project # [1.0, -1.0, MAX_Z] ##;
+		Audio.Music.loadFromResource("music.ogg").play(true);
+	}
+
 	field time = 0;
 	field pos = [0.0, -0.5, 1.0];
 	field vel = [0.0, 0.0, 0.0];
@@ -58,18 +74,6 @@ class MainScene : AbstractScene {
 	field lasers = [];
 	field enemyCooldown = 0;
 	field enemies = [];
-
-	field farTopLeft;
-	field farTopRight;
-	field farBottomLeft;
-	field farBottomRight;
-
-	constructor() {
-		this.farTopLeft = ## project # [-1.0, 1.0, MAX_Z] ##;
-		this.farTopRight = ## project # [1.0, 1.0, MAX_Z] ##;
-		this.farBottomLeft = ## project # [-1.0, -1.0, MAX_Z] ##;
-		this.farBottomRight = ## project # [1.0, -1.0, MAX_Z] ##;
-	}
 
 	function update(inputManager, events) {
 		++this.time;
@@ -145,6 +149,7 @@ class MainScene : AbstractScene {
 		}
 		// Shoot lasers.
 		if (this.laserCooldown == 0 && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
+			MainScene.laserSound.play();
 			this.lasers.add([this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
 			this.lasers.add([this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
 			this.laserCooldown = LASER_COOLDOWN;
@@ -162,7 +167,6 @@ class MainScene : AbstractScene {
 		// Check for laser collisions.
 		for (laserPos : this.lasers) {
 			for (enemy : this.enemies) {
-				
 			}
 		}
 	}
@@ -224,13 +228,13 @@ class MainScene : AbstractScene {
 		}
 
 		// Draw box around world.
-		## drawLine # [0.0, 0.0] # this.farTopLeft ##;
-		## drawLine # [X_RES, 0.0] # this.farTopRight ##;
-		## drawLine # [0.0, Y_RES] # this.farBottomLeft ##;
-		## drawLine # [X_RES, Y_RES] # this.farBottomRight ##;
-		## drawLine # this.farTopLeft # this.farTopRight ##;
-		## drawLine # this.farTopRight # this.farBottomRight ##;
-		## drawLine # this.farBottomRight # this.farBottomLeft ##;
-		## drawLine # this.farBottomLeft # this.farTopLeft ##;
+		## drawLine # [0.0, 0.0] # MainScene.farTopLeft ##;
+		## drawLine # [X_RES, 0.0] # MainScene.farTopRight ##;
+		## drawLine # [0.0, Y_RES] # MainScene.farBottomLeft ##;
+		## drawLine # [X_RES, Y_RES] # MainScene.farBottomRight ##;
+		## drawLine # MainScene.farTopLeft # MainScene.farTopRight ##;
+		## drawLine # MainScene.farTopRight # MainScene.farBottomRight ##;
+		## drawLine # MainScene.farBottomRight # MainScene.farBottomLeft ##;
+		## drawLine # MainScene.farBottomLeft # MainScene.farTopLeft ##;
 	}
 }
