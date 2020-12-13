@@ -65,14 +65,10 @@ class MainScene : AbstractScene {
 	field farBottomRight;
 
 	constructor() {
-		farTopLeft = [-1.0, 1.0, MAX_Z];
-		farTopRight = [1.0, 1.0, MAX_Z];
-		farBottomLeft = [-1.0, -1.0, MAX_Z];
-		farBottomRight = [1.0, -1.0, MAX_Z];
-		this.farTopLeft = this.project(farTopLeft);
-		this.farTopRight = this.project(farTopRight);
-		this.farBottomLeft = this.project(farBottomLeft);
-		this.farBottomRight = this.project(farBottomRight);
+		this.farTopLeft = ## project # [-1.0, 1.0, MAX_Z] ##;
+		this.farTopRight = ## project # [1.0, 1.0, MAX_Z] ##;
+		this.farBottomLeft = ## project # [-1.0, -1.0, MAX_Z] ##;
+		this.farBottomRight = ## project # [1.0, -1.0, MAX_Z] ##;
 	}
 
 	function update(inputManager, events) {
@@ -163,52 +159,41 @@ class MainScene : AbstractScene {
 			this.enemies.add(new Enemy(pos, ENEMY_MAX_OMEGA * (1.0 - 2.0 * Random.randomFloat())));
 			this.enemyCooldown = ENEMY_COOLDOWN;
 		}
-	}
-
-	// Projects a 3D point [x, y, z] into screen space.
-	function project(p) {
-		return
-			[ 0.5 * X_RES * (p[0] / p[2] + 1)
-			, 0.5 * Y_RES * (p[1] / -p[2] + 1)
-			];
-	}
-
-	function drawLine(p1, p2) {
-		Graphics2D.Draw.line
-			( p1[0]
-			, p1[1]
-			, p2[0]
-			, p2[1]
-			, 2
-			, 0, 192, 0
-			);
+		// Check for laser collisions.
+		for (laserPos : this.lasers) {
+			for (enemy : this.enemies) {
+				
+			}
+		}
 	}
 
 	function render() {
 		Graphics2D.Draw.fill(0, 0, 0);
 
 		// Draw spaceship.
-		left = this.project([this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
-		right = this.project([this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
-		top = this.project([this.pos[0], this.pos[1] + SHIP_HALF_HEIGHT, this.pos[2]]);
-		bottom = this.project([this.pos[0], this.pos[1] - SHIP_HALF_HEIGHT, this.pos[2]]);
-		front = this.project(
+		left = ## project # [this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]] ##;
+		right = ## project # [this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]] ##;
+		top = ## project # [this.pos[0], this.pos[1] + SHIP_HALF_HEIGHT, this.pos[2]] ##;
+		bottom = ## project # [this.pos[0], this.pos[1] - SHIP_HALF_HEIGHT, this.pos[2]] ##;
+		front = ## project #
 			[ this.pos[0] + TILT_FACTOR * this.vel[0]
 			, this.pos[1] + TILT_FACTOR * this.vel[1]
 			, this.pos[2] + SHIP_LENGTH
-			]);
-		this.drawLine(left, top);
-		this.drawLine(top, right);
-		this.drawLine(right, bottom);
-		this.drawLine(bottom, left);
-		this.drawLine(left, front);
-		this.drawLine(right, front);
-		this.drawLine(top, front);
-		this.drawLine(bottom, front);
+			] ##;
+		## drawLine # left # top ##;
+		## drawLine # top # right ##;
+		## drawLine # right # bottom ##;
+		## drawLine # bottom # left ##;
+		## drawLine # left # front ##;
+		## drawLine # right # front ##;
+		## drawLine # top # front ##;
+		## drawLine # bottom # front ##;
 
 		// Draw lasers.
 		for (pos : this.lasers) {
-			this.drawLine(this.project(pos), this.project([pos[0], pos[1], pos[2] + LASER_LENGTH]));
+			start = ## project # pos ##;
+			end = ## project # [pos[0], pos[1], pos[2] + LASER_LENGTH] ##;
+			## drawLine # start # end ##;
 		}
 
 		// Draw enemies.
@@ -218,34 +203,34 @@ class MainScene : AbstractScene {
 			sinT = Math.sin(this.time * enemy.omega);
 			cosT90 = Math.cos(this.time * enemy.omega + 0.5 * Math.PI);
 			sinT90 = Math.sin(this.time * enemy.omega + 0.5 * Math.PI);
-			left = this.project([pos[0] - ENEMY_RADIUS * cosT, pos[1] - ENEMY_RADIUS * sinT, pos[2]]);
-			right = this.project([pos[0] + ENEMY_RADIUS * cosT, pos[1] + ENEMY_RADIUS * sinT, pos[2]]);
-			top = this.project([pos[0] + ENEMY_RADIUS * cosT90, pos[1] + ENEMY_RADIUS * sinT90, pos[2]]);
-			bottom = this.project([pos[0] - ENEMY_RADIUS * cosT90, pos[1] - ENEMY_RADIUS * sinT90, pos[2]]);
-			front = this.project([pos[0], pos[1], pos[2] - ENEMY_HALF_LENGTH]);
-			back = this.project([pos[0], pos[1], pos[2] + ENEMY_HALF_LENGTH]);
-			this.drawLine(left, top);
-			this.drawLine(top, right);
-			this.drawLine(right, bottom);
-			this.drawLine(bottom, left);
-			this.drawLine(left, front);
-			this.drawLine(top, front);
-			this.drawLine(right, front);
-			this.drawLine(bottom, front);
-			this.drawLine(left, back);
-			this.drawLine(top, back);
-			this.drawLine(right, back);
-			this.drawLine(bottom, back);
+			left = ## project # [pos[0] - ENEMY_RADIUS * cosT, pos[1] - ENEMY_RADIUS * sinT, pos[2]] ##;
+			right = ## project # [pos[0] + ENEMY_RADIUS * cosT, pos[1] + ENEMY_RADIUS * sinT, pos[2]] ##;
+			top = ## project # [pos[0] + ENEMY_RADIUS * cosT90, pos[1] + ENEMY_RADIUS * sinT90, pos[2]] ##;
+			bottom = ## project # [pos[0] - ENEMY_RADIUS * cosT90, pos[1] - ENEMY_RADIUS * sinT90, pos[2]] ##;
+			front = ## project # [pos[0], pos[1], pos[2] - ENEMY_HALF_LENGTH] ##;
+			back = ## project # [pos[0], pos[1], pos[2] + ENEMY_HALF_LENGTH] ##;
+			## drawLine # left # top ##;
+			## drawLine # top # right ##;
+			## drawLine # right # bottom ##;
+			## drawLine # bottom # left ##;
+			## drawLine # left # front ##;
+			## drawLine # top # front ##;
+			## drawLine # right # front ##;
+			## drawLine # bottom # front ##;
+			## drawLine # left # back ##;
+			## drawLine # top # back ##;
+			## drawLine # right # back ##;
+			## drawLine # bottom # back ##;
 		}
 
 		// Draw box around world.
-		this.drawLine([0.0, 0.0], this.farTopLeft);
-		this.drawLine([X_RES, 0.0], this.farTopRight);
-		this.drawLine([0.0, Y_RES], this.farBottomLeft);
-		this.drawLine([X_RES, Y_RES], this.farBottomRight);
-		this.drawLine(this.farTopLeft, this.farTopRight);
-		this.drawLine(this.farTopRight, this.farBottomRight);
-		this.drawLine(this.farBottomRight, this.farBottomLeft);
-		this.drawLine(this.farBottomLeft, this.farTopLeft);
+		## drawLine # [0.0, 0.0] # this.farTopLeft ##;
+		## drawLine # [X_RES, 0.0] # this.farTopRight ##;
+		## drawLine # [0.0, Y_RES] # this.farBottomLeft ##;
+		## drawLine # [X_RES, Y_RES] # this.farBottomRight ##;
+		## drawLine # this.farTopLeft # this.farTopRight ##;
+		## drawLine # this.farTopRight # this.farBottomRight ##;
+		## drawLine # this.farBottomRight # this.farBottomLeft ##;
+		## drawLine # this.farBottomLeft # this.farTopLeft ##;
 	}
 }

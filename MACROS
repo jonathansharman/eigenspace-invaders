@@ -1,0 +1,4 @@
+## drawLine # p1 # p2 ## Graphics2D.Draw.line(p1[0], p1[1], p2[0], p2[1], 2, 0, 192, 0) ##
+
+// Projects a 3D point [x, y, z] into screen space.
+## project # p ## [0.5 * X_RES * (p[0] / p[2] + 1), 0.5 * Y_RES * (p[1] / -p[2] + 1)] ##
