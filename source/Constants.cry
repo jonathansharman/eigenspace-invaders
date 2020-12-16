@@ -77,3 +77,7 @@ const HEART_LEFT_PAD = 5.0;
 // Title screen
 const TITLE_ZOOM_DURATION = 50.0;
 const TITLE_Z_MIN = 2.0;
+
+// Game over screen
+const GAME_OVER_ZOOM_DURATION = 50.0;
+const GAME_OVER_Z_MIN = 2.0;

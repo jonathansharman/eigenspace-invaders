@@ -1,10 +1,11 @@
 import Graphics2D;
 import TwoCansAlpha4;
 
-class Textures {
+static class Textures {
 	static field heart = Images.get("heart.png");
 	static field movementHelp = Images.get("arrows.png");
 	static field title = Images.get("title.png");
 	static field shootingInstructions = Images.get("shooting-instructions.png");
 	static field generalInstructions = Images.get("general-instructions.png");
+	static field restartInstructions = Images.get("restart-instructions.png");
 }

@@ -78,9 +78,8 @@ class MainScene : AbstractScene {
 		.setColor(0, 192, 0);
 
 	static constructor() {
-		// Force Sounds and Textures to preload their data to avoid missed frames later.
+		// Force Sounds to preload to avoid missed frames later.
 		_ = Sounds.laser;
-		_ = Textures.heart;
 	}
 
 	field state = MOVEMENT_HELP_STATE;
@@ -126,6 +125,16 @@ class MainScene : AbstractScene {
 				, DEBRIS_MAX_OMEGA * (1.0 - 2.0 * Random.randomFloat())
 				, Random.randomInt(DEBRIS_MIN_LIFETIME, DEBRIS_MAX_LIFETIME + 1)
 				));
+		}
+	}
+
+	function spawnBillboardDebris(billboard) {
+		for (i = 0; i < DEBRIS_BILLBOARD_CLUSTERS; ++i) {
+			this.spawnDebris(
+				[ billboard.left + Random.randomFloat() * (billboard.right - billboard.left)
+				, billboard.bottom + Random.randomFloat() * (billboard.top - billboard.bottom)
+				, billboard.pos[2]
+				]);
 		}
 	}
 
@@ -204,8 +213,15 @@ class MainScene : AbstractScene {
 					this.setState(GAME_OVER_STATE);
 					// Play game over sound.
 					Sounds.gameOver.play();
-					// Spawn debris.
+					// Spawn debris from the ship.
 					this.spawnDebris(this.pos);
+					// Blow up any remaining enemies.
+					for (enemy : this.enemies) {
+						this.spawnDebris(enemy.pos);
+					}
+					this.enemies.clear();
+					// Spawn the restart billboard.
+					this.billboards.add(new Billboard(Textures.restartInstructions, [0.0, 0.0, MAX_Z], 2.0));
 				}
 			}
 		}
@@ -318,14 +334,7 @@ class MainScene : AbstractScene {
 							// Play good explosion sound.
 							sound = Sounds.explosion1.play();
 							// Spawn debris.
-							this.spawnDebris(billboard.pos);
-							for (i = 0; i < DEBRIS_BILLBOARD_CLUSTERS; ++i) {
-								this.spawnDebris(
-									[ billboard.left + Random.randomFloat() * (billboard.right - billboard.left)
-									, billboard.bottom + Random.randomFloat() * (billboard.top - billboard.bottom)
-									, billboard.pos[2]
-									]);
-							}
+							this.spawnBillboardDebris(billboard);
 							// Update score if in playing state.
 							if (this.state == PLAYING_STATE) {
 								++this.score;
@@ -350,6 +359,31 @@ class MainScene : AbstractScene {
 				this.updateEnemySpawning();
 				break;
 			case GAME_OVER_STATE:
+				// Compute z-coordinate of billboards.
+				z = MAX_Z - (MAX_Z - TITLE_Z_MIN) * Math.min(1.0, this.timeInState / TITLE_ZOOM_DURATION);
+				for (billboard : this.billboards) {
+					billboard.pos[2] = z;
+				}
+				if (inputManager.isKeyPressed(KeyboardKey.R)) {
+					// Blow up the restart billboard.
+					Sounds.explosion1.play();
+					for (billboard : this.billboards) {
+						this.spawnBillboardDebris(billboard);
+					}
+					this.billboards.clear();
+					// Reset and play again.
+					this.lives = MAX_LIVES;
+					this.pos = [0.0, -0.5, MIN_Z];
+					this.vel = [0.0, 0.0];
+					this.laserActiveCooldown = 0;
+					this.lasers.clear();
+					this.spawnCooldown = SPAWN_MAX_COOLDOWN;
+					this.spawnActiveCooldown = SPAWN_MAX_COOLDOWN;
+					this.oddSpawn = true;
+					this.score = 0;
+					this.scoreText = MainScene.font.render("0");
+					this.setState(PLAYING_STATE);
+				}
 				break;
 		}
 	}
@@ -502,7 +536,17 @@ class MainScene : AbstractScene {
 				this.drawHUD();
 				break;
 			case GAME_OVER_STATE:
-				this.drawLasers(null, null);
+				// Get the billboard's z-coordinate.
+				z = this.billboards.length > 0 ? this.billboards[0].pos[2] : null;
+				// Draw lasers that are behind the billboard.
+				this.drawLasers(z, null);
+				// Draw the billboard.
+				for (billboard : this.billboards) {
+					billboard.draw();
+				}
+				// Draw lasers that are in front of the billboard.
+				this.drawLasers(null, z);
+				// Draw HUD in front of the billboard.
 				this.drawHUD();
 				break;
 		}
