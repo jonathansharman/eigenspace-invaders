@@ -58,6 +58,10 @@ const DEBRIS_MAX_COMPONENT_SPEED = 0.02;
 const DEBRIS_MIN_LIFETIME = 10;
 const DEBRIS_MAX_LIFETIME = 30;
 
+const HUD_TOP_PAD = 5.0;
+const MAX_LIVES = 3;
+const HEART_LEFT_PAD = 5.0;
+
 class Enemy {
 	field pos;
 	field omega;
@@ -83,28 +87,23 @@ class Debris {
 }
 
 class MainScene : AbstractScene {
-	static field farTopLeft;
-	static field farTopRight;
-	static field farBottomLeft;
-	static field farBottomRight;
+	static field farTopLeft = ## project # [-1.0, 1.0, MAX_Z] ##;
+	static field farTopRight = ## project # [1.0, 1.0, MAX_Z] ##;
+	static field farBottomLeft = ## project # [-1.0, -1.0, MAX_Z] ##;
+	static field farBottomRight = ## project # [1.0, -1.0, MAX_Z] ##;
 
 	static field font = FontResource.fromResource("Infinium Guardian.ttf").getRenderer().setSize(FONT_SIZE).setColor(0, 192, 0);
 	static field laserSound = Audio.SoundResource.loadFromResource("laser.ogg");
-	static field explosionSound = Audio.SoundResource.loadFromResource("explosion.ogg");
+	static field explosionSound1 = Audio.SoundResource.loadFromResource("explosion1.ogg");
+	static field explosionSound2 = Audio.SoundResource.loadFromResource("explosion2.ogg");
 	static field spawnSound1 = Audio.SoundResource.loadFromResource("spawn1.ogg");
 	static field spawnSound2 = Audio.SoundResource.loadFromResource("spawn2.ogg");
 
-	static constructor() {
-		MainScene.farTopLeft = ## project # [-1.0, 1.0, MAX_Z] ##;
-		MainScene.farTopRight = ## project # [1.0, 1.0, MAX_Z] ##;
-		MainScene.farBottomLeft = ## project # [-1.0, -1.0, MAX_Z] ##;
-		MainScene.farBottomRight = ## project # [1.0, -1.0, MAX_Z] ##;
-		//Audio.Music.loadFromResource("music.ogg").play(true);
-	}
+	static field heart = Images.get("heart.png");
 
 	field time = 0;
 
-	field pos = [0.0, -0.5, 1.0];
+	field pos = [0.0, -0.5, MIN_Z];
 	field vel = [0.0, 0.0];
 
 	field laserActiveCooldown = 0;
@@ -120,41 +119,69 @@ class MainScene : AbstractScene {
 	field score = 0;
 	field scoreText = MainScene.font.render("0");
 
+	field lives = MAX_LIVES;
+
+	function spawnDebris(center) {
+		for (i = 0; i < DEBRIS_COUNT; ++i) {
+			this.debris.add(new Debris
+				( center.clone()
+				, [ DEBRIS_MAX_COMPONENT_SPEED * (1 - 2.0 * Random.randomFloat())
+				  , DEBRIS_MAX_COMPONENT_SPEED * (1 - 2.0 * Random.randomFloat())
+				  , DEBRIS_MAX_COMPONENT_SPEED * (1 - 2.0 * Random.randomFloat())
+				  ]
+				, DEBRIS_MAX_OMEGA * (1.0 - 2.0 * Random.randomFloat())
+				, Random.randomInt(DEBRIS_MIN_LIFETIME, DEBRIS_MAX_LIFETIME + 1)
+				));
+		}
+	}
+
 	function update(inputManager, events) {
 		++this.time;
-		// Move.
-		if (inputManager.isKeyPressed(KeyboardKey.RIGHT)) {
-			this.vel[0] += LATERAL_ACCELERATION;
-		}
-		if (inputManager.isKeyPressed(KeyboardKey.LEFT)) {
-			this.vel[0] -= LATERAL_ACCELERATION;
-		}
-		if (inputManager.isKeyPressed(KeyboardKey.UP)) {
-			this.vel[1] += LATERAL_ACCELERATION;
-		}
-		if (inputManager.isKeyPressed(KeyboardKey.DOWN)) {
-			this.vel[1] -= LATERAL_ACCELERATION;
-		}
-		// Update position according to velocity.
-		this.pos[0] += this.vel[0];
-		this.pos[1] += this.vel[1];
-		// Apply drag.
-		this.vel[0] *= LATERAL_DRAG;
-		this.vel[1] *= LATERAL_DRAG;
-		// Keep the ship in bounds.
-		if (this.pos[0] < SHIP_MIN_X) {
-			this.pos[0] = SHIP_MIN_X;
-			this.vel[0] = 0.0;
-		} else if (this.pos[0] > SHIP_MAX_X) {
-			this.pos[0] = SHIP_MAX_X;
-			this.vel[0] = 0.0;
-		}
-		if (this.pos[1] < SHIP_MIN_Y) {
-			this.pos[1] = SHIP_MIN_Y;
-			this.vel[1] = 0.0;
-		} else if (this.pos[1] > SHIP_MAX_Y) {
-			this.pos[1] = SHIP_MAX_Y;
-			this.vel[1] = 0.0;
+		if (this.lives > 0) {
+			// Move.
+			if (inputManager.isKeyPressed(KeyboardKey.RIGHT)) {
+				this.vel[0] += LATERAL_ACCELERATION;
+			}
+			if (inputManager.isKeyPressed(KeyboardKey.LEFT)) {
+				this.vel[0] -= LATERAL_ACCELERATION;
+			}
+			if (inputManager.isKeyPressed(KeyboardKey.UP)) {
+				this.vel[1] += LATERAL_ACCELERATION;
+			}
+			if (inputManager.isKeyPressed(KeyboardKey.DOWN)) {
+				this.vel[1] -= LATERAL_ACCELERATION;
+			}
+			// Update position according to velocity.
+			this.pos[0] += this.vel[0];
+			this.pos[1] += this.vel[1];
+			// Apply drag.
+			this.vel[0] *= LATERAL_DRAG;
+			this.vel[1] *= LATERAL_DRAG;
+			// Keep the ship in bounds.
+			if (this.pos[0] < SHIP_MIN_X) {
+				this.pos[0] = SHIP_MIN_X;
+				this.vel[0] = 0.0;
+			} else if (this.pos[0] > SHIP_MAX_X) {
+				this.pos[0] = SHIP_MAX_X;
+				this.vel[0] = 0.0;
+			}
+			if (this.pos[1] < SHIP_MIN_Y) {
+				this.pos[1] = SHIP_MIN_Y;
+				this.vel[1] = 0.0;
+			} else if (this.pos[1] > SHIP_MAX_Y) {
+				this.pos[1] = SHIP_MAX_Y;
+				this.vel[1] = 0.0;
+			}
+			// Shoot lasers.
+			if (this.laserActiveCooldown > 0) {
+				--this.laserActiveCooldown;
+			}
+			if (this.laserActiveCooldown == 0 && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
+				MainScene.laserSound.play();
+				this.lasers.add([this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
+				this.lasers.add([this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
+				this.laserActiveCooldown = LASER_COOLDOWN;
+			}
 		}
 		// Update laser positions.
 		for (i = 0; i < this.lasers.length; ++i) {
@@ -167,9 +194,20 @@ class MainScene : AbstractScene {
 		// Update enemy positions.
 		for (i = 0; i < this.enemies.length; ++i) {
 			this.enemies[i].pos[2] -= ENEMY_SPEED;
-			if (this.enemies[i].pos[2] < 1.0) {
+			// Check if enemy has reached the end.
+			if (this.enemies[i].pos[2] < MIN_Z) {
+				// Play sound.
+				sound = MainScene.explosionSound2.play();
+				// Spawn debris.
+				this.spawnDebris(this.enemies[i].pos);
+				// Destroy the enemy.
 				this.enemies.remove(i);
 				--i;
+				// Lose a life.
+				--this.lives;
+				if (this.lives == 0) {
+					// Game over.
+				}
 			}
 		}
 		// Update debris.
@@ -184,16 +222,6 @@ class MainScene : AbstractScene {
 			debris.pos[0] += debris.vel[0];
 			debris.pos[1] += debris.vel[1];
 			debris.pos[2] += debris.vel[2];
-		}
-		// Shoot lasers.
-		if (this.laserActiveCooldown > 0) {
-			--this.laserActiveCooldown;
-		}
-		if (this.laserActiveCooldown == 0 && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
-			MainScene.laserSound.play();
-			this.lasers.add([this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
-			this.lasers.add([this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
-			this.laserActiveCooldown = LASER_COOLDOWN;
 		}
 		// Spawn enemies.
 		if (this.spawnCooldown > SPAWN_MIN_COOLDOWN && this.time % SPAWN_COOLDOWN_REDUCTION_FREQUENCY == 0) {
@@ -230,22 +258,14 @@ class MainScene : AbstractScene {
 					&& laserPos[2] <= enemy.pos[2] + ENEMY_RADIUS;
 				if (hit) {
 					// Play sound.
-					sound = MainScene.explosionSound.play();
+					sound = MainScene.explosionSound1.play();
 					// Spawn debris.
-					for (i = 0; i < DEBRIS_COUNT; ++i) {
-						this.debris.add(new Debris
-							( enemy.pos.clone()
-							, [ DEBRIS_MAX_COMPONENT_SPEED * (1 - 2.0 * Random.randomFloat())
-							  , DEBRIS_MAX_COMPONENT_SPEED * (1 - 2.0 * Random.randomFloat())
-							  , DEBRIS_MAX_COMPONENT_SPEED * (1 - 2.0 * Random.randomFloat())
-							  ]
-							, DEBRIS_MAX_OMEGA * (1.0 - 2.0 * Random.randomFloat())
-							, Random.randomInt(DEBRIS_MIN_LIFETIME, DEBRIS_MAX_LIFETIME + 1)
-							));
-					}
+					this.spawnDebris(enemy.pos);
 					// Update score.
-					++this.score;
-					this.scoreText = MainScene.font.render(this.score);
+					if (this.lives > 0) {
+						++this.score;
+						this.scoreText = MainScene.font.render(this.score);
+					}
 					// Destroy the enemy and the laser.
 					this.lasers.remove(laserIdx);
 					this.enemies.remove(enemyIdx);
@@ -261,23 +281,25 @@ class MainScene : AbstractScene {
 		Graphics2D.Draw.fill(0, 0, 0);
 
 		// Draw spaceship.
-		left = ## project # [this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]] ##;
-		right = ## project # [this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]] ##;
-		top = ## project # [this.pos[0], this.pos[1] + SHIP_HALF_HEIGHT, this.pos[2]] ##;
-		bottom = ## project # [this.pos[0], this.pos[1] - SHIP_HALF_HEIGHT, this.pos[2]] ##;
-		front = ## project #
-			[ this.pos[0] + TILT_FACTOR * this.vel[0]
-			, this.pos[1] + TILT_FACTOR * this.vel[1]
-			, this.pos[2] + SHIP_LENGTH
-			] ##;
-		## drawLine # left # top ##;
-		## drawLine # top # right ##;
-		## drawLine # right # bottom ##;
-		## drawLine # bottom # left ##;
-		## drawLine # left # front ##;
-		## drawLine # right # front ##;
-		## drawLine # top # front ##;
-		## drawLine # bottom # front ##;
+		if (this.lives > 0) {
+			left = ## project # [this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]] ##;
+			right = ## project # [this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]] ##;
+			top = ## project # [this.pos[0], this.pos[1] + SHIP_HALF_HEIGHT, this.pos[2]] ##;
+			bottom = ## project # [this.pos[0], this.pos[1] - SHIP_HALF_HEIGHT, this.pos[2]] ##;
+			front = ## project #
+				[ this.pos[0] + TILT_FACTOR * this.vel[0]
+				, this.pos[1] + TILT_FACTOR * this.vel[1]
+				, this.pos[2] + SHIP_LENGTH
+				] ##;
+			## drawLine # left # top ##;
+			## drawLine # top # right ##;
+			## drawLine # right # bottom ##;
+			## drawLine # bottom # left ##;
+			## drawLine # left # front ##;
+			## drawLine # right # front ##;
+			## drawLine # top # front ##;
+			## drawLine # bottom # front ##;
+		}
 
 		// Draw lasers.
 		for (pos : this.lasers) {
@@ -350,6 +372,14 @@ class MainScene : AbstractScene {
 		## drawLine # MainScene.farBottomLeft # MainScene.farTopLeft ##;
 
 		// Draw score.
-		this.scoreText.draw(0.5 * (X_RES - this.scoreText.width), 0);
+		this.scoreText.draw(0.5 * X_RES - this.scoreText.width, HUD_TOP_PAD);
+
+		// Draw lives.
+		for (i = 0; i < this.lives; ++i) {
+			MainScene.heart.draw
+				( 0.5 * X_RES + HEART_LEFT_PAD + i * (HEART_LEFT_PAD + MainScene.heart.width)
+				, HUD_TOP_PAD
+				);
+		}
 	}
 }
