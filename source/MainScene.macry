@@ -8,10 +8,18 @@ import TwoCansAlpha4;
 const X_RES = $var["screen_width"];
 const Y_RES = $var["screen_height"];
 
+const ONE_THIRD_TAU = 2.0 * Math.PI / 3.0;
+const TWO_THIRDS_TAU = 2.0 * ONE_THIRD_TAU;
+
 const LATERAL_ACCELERATION = 0.01;
 const LATERAL_DRAG = 0.9;
 const LONGITUDINAL_SPEED = 0.01;
 
+const MIN_X = -1.0;
+const MAX_X = 1.0;
+const MIN_Y = -1.0;
+const MAX_Y = 1.0;
+const MIN_Z = 1.0;
 const MAX_Z = 10.0;
 
 const SHIP_HALF_WIDTH = 0.2;
@@ -23,8 +31,6 @@ const SHIP_MIN_X = -1.0 + SHIP_HALF_WIDTH;
 const SHIP_MAX_X = 1.0 - SHIP_HALF_WIDTH;
 const SHIP_MIN_Y = -1.0 + SHIP_HALF_HEIGHT;
 const SHIP_MAX_Y = 1.0 - SHIP_HALF_HEIGHT;
-const SHIP_MIN_Z = 1.0;
-const SHIP_MAX_Z = 2.0;
 
 const LASER_LENGTH = 0.4;
 const LASER_SPEED = 0.1;
@@ -33,13 +39,22 @@ const LASER_COOLDOWN = 15;
 const ENEMY_RADIUS = 0.2;
 const ENEMY_HALF_LENGTH = 0.2;
 const ENEMY_SPEED = 0.05;
-const ENEMY_COOLDOWN = 50;
-
 const ENEMY_MIN_X = -1.0 + ENEMY_RADIUS;
 const ENEMY_MAX_X = 1.0 - ENEMY_RADIUS;
 const ENEMY_MIN_Y = -1.0 + ENEMY_RADIUS;
 const ENEMY_MAX_Y = 1.0 - ENEMY_RADIUS;
 const ENEMY_MAX_OMEGA = 0.3;
+
+const SPAWN_MAX_COOLDOWN = 5 * LASER_COOLDOWN;
+const SPAWN_MIN_COOLDOWN = LASER_COOLDOWN;
+const SPAWN_COOLDOWN_REDUCTION_FREQUENCY = 200;
+
+const DEBRIS_RADIUS = 0.1;
+const DEBRIS_COUNT = 10;
+const DEBRIS_MAX_OMEGA = 0.6;
+const DEBRIS_MAX_COMPONENT_SPEED = 0.02;
+const DEBRIS_MIN_LIFETIME = 10;
+const DEBRIS_MAX_LIFETIME = 30;
 
 class Enemy {
 	field pos;
@@ -51,6 +66,20 @@ class Enemy {
 	}
 }
 
+class Debris {
+	field pos;
+	field vel;
+	field omega;
+	field lifetime;
+
+	constructor(pos, vel, omega, lifetime) {
+		this.pos = pos;
+		this.vel = vel;
+		this.omega = omega;
+		this.lifetime = lifetime;
+	}
+}
+
 class MainScene : AbstractScene {
 	static field farTopLeft;
 	static field farTopRight;
@@ -58,31 +87,31 @@ class MainScene : AbstractScene {
 	static field farBottomRight;
 
 	static field laserSound = Audio.SoundResource.loadFromResource("laser.ogg");
+	static field explosionSound = Audio.SoundResource.loadFromResource("explosion.ogg");
+	static field spawnSound1 = Audio.SoundResource.loadFromResource("spawn1.ogg");
+	static field spawnSound2 = Audio.SoundResource.loadFromResource("spawn2.ogg");
 
 	static constructor() {
 		MainScene.farTopLeft = ## project # [-1.0, 1.0, MAX_Z] ##;
 		MainScene.farTopRight = ## project # [1.0, 1.0, MAX_Z] ##;
 		MainScene.farBottomLeft = ## project # [-1.0, -1.0, MAX_Z] ##;
 		MainScene.farBottomRight = ## project # [1.0, -1.0, MAX_Z] ##;
-		Audio.Music.loadFromResource("music.ogg").play(true);
+		//Audio.Music.loadFromResource("music.ogg").play(true);
 	}
 
 	field time = 0;
 	field pos = [0.0, -0.5, 1.0];
-	field vel = [0.0, 0.0, 0.0];
-	field laserCooldown = 0;
+	field vel = [0.0, 0.0];
+	field laserActiveCooldown = 0;
 	field lasers = [];
-	field enemyCooldown = 0;
+	field spawnCooldown = SPAWN_MAX_COOLDOWN;
+	field spawnActiveCooldown = SPAWN_MAX_COOLDOWN;
+	field oddSpawn = true;
 	field enemies = [];
+	field debris = [];
 
 	function update(inputManager, events) {
 		++this.time;
-		if (this.laserCooldown > 0) {
-			--this.laserCooldown;
-		}
-		if (this.enemyCooldown > 0) {
-			--this.enemyCooldown;
-		}
 		// Move.
 		if (inputManager.isKeyPressed(KeyboardKey.RIGHT)) {
 			this.vel[0] += LATERAL_ACCELERATION;
@@ -96,16 +125,9 @@ class MainScene : AbstractScene {
 		if (inputManager.isKeyPressed(KeyboardKey.DOWN)) {
 			this.vel[1] -= LATERAL_ACCELERATION;
 		}
-		if (inputManager.isKeyPressed(KeyboardKey.Q)) {
-			this.vel[2] += LONGITUDINAL_SPEED;
-		}
-		if (inputManager.isKeyPressed(KeyboardKey.A)) {
-			this.vel[2] -= LONGITUDINAL_SPEED;
-		}
 		// Update position according to velocity.
 		this.pos[0] += this.vel[0];
 		this.pos[1] += this.vel[1];
-		this.pos[2] += this.vel[2];
 		// Apply drag.
 		this.vel[0] *= LATERAL_DRAG;
 		this.vel[1] *= LATERAL_DRAG;
@@ -124,13 +146,6 @@ class MainScene : AbstractScene {
 			this.pos[1] = SHIP_MAX_Y;
 			this.vel[1] = 0.0;
 		}
-		if (this.pos[2] < SHIP_MIN_Z) {
-			this.pos[2] = 1.0;
-			this.vel[2] = 0.0;
-		} else if (this.pos[2] > SHIP_MAX_Z) {
-			this.pos[2] = SHIP_MAX_Z;
-			this.vel[2] = 0.0;
-		}
 		// Update laser positions.
 		for (i = 0; i < this.lasers.length; ++i) {
 			this.lasers[i][2] += LASER_SPEED;
@@ -147,26 +162,85 @@ class MainScene : AbstractScene {
 				--i;
 			}
 		}
+		// Update debris.
+		for (i = 0; i < this.debris.length; ++i) {
+			debris = this.debris[i];
+			--debris.lifetime;
+			if (debris.lifetime == 0) {
+				this.debris.remove(i);
+				--i;
+				continue;
+			}
+			debris.pos[0] += debris.vel[0];
+			debris.pos[1] += debris.vel[1];
+			debris.pos[2] += debris.vel[2];
+		}
 		// Shoot lasers.
-		if (this.laserCooldown == 0 && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
+		if (this.laserActiveCooldown > 0) {
+			--this.laserActiveCooldown;
+		}
+		if (this.laserActiveCooldown == 0 && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
 			MainScene.laserSound.play();
 			this.lasers.add([this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
 			this.lasers.add([this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
-			this.laserCooldown = LASER_COOLDOWN;
+			this.laserActiveCooldown = LASER_COOLDOWN;
 		}
 		// Spawn enemies.
-		if (this.enemyCooldown == 0) {
+		if (this.spawnCooldown > SPAWN_MIN_COOLDOWN && this.time % SPAWN_COOLDOWN_REDUCTION_FREQUENCY == 0) {
+			print(this.spawnCooldown);
+			--this.spawnCooldown;
+		}
+		if (this.spawnActiveCooldown > 0) {
+			--this.spawnActiveCooldown;
+		}
+		if (this.spawnActiveCooldown == 0) {
+			if (this.oddSpawn) {
+				MainScene.spawnSound1.play();
+			} else {
+				MainScene.spawnSound2.play();
+			}
+			this.oddSpawn = !this.oddSpawn;
 			pos =
 				[ ENEMY_MIN_X + Random.randomFloat() * (ENEMY_MAX_X - ENEMY_MIN_X)
 				, ENEMY_MIN_Y + Random.randomFloat() * (ENEMY_MAX_Y - ENEMY_MIN_Y)
 				, MAX_Z
 				];
 			this.enemies.add(new Enemy(pos, ENEMY_MAX_OMEGA * (1.0 - 2.0 * Random.randomFloat())));
-			this.enemyCooldown = ENEMY_COOLDOWN;
+			this.spawnActiveCooldown = this.spawnCooldown;
 		}
 		// Check for laser collisions.
-		for (laserPos : this.lasers) {
-			for (enemy : this.enemies) {
+		for (laserIdx = 0; laserIdx < this.lasers.length; ++laserIdx) {
+			for (enemyIdx = 0; enemyIdx < this.enemies.length; ++enemyIdx) {
+				laserPos = this.lasers[laserIdx];
+				enemy = this.enemies[enemyIdx];
+				hit = enemy.pos[0] - ENEMY_RADIUS <= laserPos[0]
+					&& laserPos[0] <= enemy.pos[0] + ENEMY_RADIUS
+					&& enemy.pos[1] - ENEMY_RADIUS <= laserPos[1]
+					&& laserPos[1] <= enemy.pos[1] + ENEMY_RADIUS
+					&& enemy.pos[2] - ENEMY_RADIUS <= laserPos[2] + LASER_LENGTH
+					&& laserPos[2] <= enemy.pos[2] + ENEMY_RADIUS;
+				if (hit) {
+					// Play sound.
+					sound = MainScene.explosionSound.play();
+					// Spawn debris.
+					for (i = 0; i < DEBRIS_COUNT; ++i) {
+						this.debris.add(new Debris
+							( enemy.pos.clone()
+							, [ DEBRIS_MAX_COMPONENT_SPEED * (1 - 2.0 * Random.randomFloat())
+							  , DEBRIS_MAX_COMPONENT_SPEED * (1 - 2.0 * Random.randomFloat())
+							  , DEBRIS_MAX_COMPONENT_SPEED * (1 - 2.0 * Random.randomFloat())
+							  ]
+							, DEBRIS_MAX_OMEGA * (1.0 - 2.0 * Random.randomFloat())
+							, Random.randomInt(DEBRIS_MIN_LIFETIME, DEBRIS_MAX_LIFETIME + 1)
+							));
+					}
+					// Destroy the enemy and the laser.
+					this.lasers.remove(laserIdx);
+					this.enemies.remove(enemyIdx);
+					--laserIdx;
+					--enemyIdx;
+					break;
+				}
 			}
 		}
 	}
@@ -203,10 +277,11 @@ class MainScene : AbstractScene {
 		// Draw enemies.
 		for (enemy : this.enemies) {
 			pos = enemy.pos;
-			cosT = Math.cos(this.time * enemy.omega);
-			sinT = Math.sin(this.time * enemy.omega);
-			cosT90 = Math.cos(this.time * enemy.omega + 0.5 * Math.PI);
-			sinT90 = Math.sin(this.time * enemy.omega + 0.5 * Math.PI);
+			theta = this.time * enemy.omega;
+			cosT = Math.cos(theta);
+			sinT = Math.sin(theta);
+			cosT90 = Math.cos(theta + 0.5 * Math.PI);
+			sinT90 = Math.sin(theta + 0.5 * Math.PI);
 			left = ## project # [pos[0] - ENEMY_RADIUS * cosT, pos[1] - ENEMY_RADIUS * sinT, pos[2]] ##;
 			right = ## project # [pos[0] + ENEMY_RADIUS * cosT, pos[1] + ENEMY_RADIUS * sinT, pos[2]] ##;
 			top = ## project # [pos[0] + ENEMY_RADIUS * cosT90, pos[1] + ENEMY_RADIUS * sinT90, pos[2]] ##;
@@ -225,6 +300,31 @@ class MainScene : AbstractScene {
 			## drawLine # top # back ##;
 			## drawLine # right # back ##;
 			## drawLine # bottom # back ##;
+		}
+
+		// Draw debris.
+		for (debris : this.debris) {
+			pos = debris.pos;
+			theta = this.time * debris.omega;
+			radius = DEBRIS_RADIUS * debris.lifetime / DEBRIS_MAX_LIFETIME;
+			right = ## project #
+				[ pos[0] + radius * Math.cos(theta)
+				, pos[1] + radius * Math.sin(theta)
+				, pos[2]
+				] ##;
+			topLeft = ## project #
+				[ pos[0] + radius * Math.cos(theta + ONE_THIRD_TAU)
+				, pos[1] + radius * Math.sin(theta + ONE_THIRD_TAU)
+				, pos[2]
+				] ##;
+			bottomLeft = ## project #
+				[ pos[0] + radius * Math.cos(theta + TWO_THIRDS_TAU)
+				, pos[1] + radius * Math.sin(theta + TWO_THIRDS_TAU)
+				, pos[2]
+				] ##;
+			## drawLine # right # topLeft ##;
+			## drawLine # topLeft # bottomLeft ##;
+			## drawLine # bottomLeft # right ##;
 		}
 
 		// Draw box around world.
