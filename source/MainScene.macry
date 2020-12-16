@@ -11,6 +11,8 @@ const Y_RES = $var["screen_height"];
 const ONE_THIRD_TAU = 2.0 * Math.PI / 3.0;
 const TWO_THIRDS_TAU = 2.0 * ONE_THIRD_TAU;
 
+const FONT_SIZE = 16;
+
 const LATERAL_ACCELERATION = 0.01;
 const LATERAL_DRAG = 0.9;
 const LONGITUDINAL_SPEED = 0.01;
@@ -33,7 +35,7 @@ const SHIP_MIN_Y = -1.0 + SHIP_HALF_HEIGHT;
 const SHIP_MAX_Y = 1.0 - SHIP_HALF_HEIGHT;
 
 const LASER_LENGTH = 0.4;
-const LASER_SPEED = 0.1;
+const LASER_SPEED = 0.3;
 const LASER_COOLDOWN = 15;
 
 const ENEMY_RADIUS = 0.2;
@@ -86,6 +88,7 @@ class MainScene : AbstractScene {
 	static field farBottomLeft;
 	static field farBottomRight;
 
+	static field font = FontResource.fromResource("Infinium Guardian.ttf").getRenderer().setSize(FONT_SIZE).setColor(0, 192, 0);
 	static field laserSound = Audio.SoundResource.loadFromResource("laser.ogg");
 	static field explosionSound = Audio.SoundResource.loadFromResource("explosion.ogg");
 	static field spawnSound1 = Audio.SoundResource.loadFromResource("spawn1.ogg");
@@ -100,15 +103,22 @@ class MainScene : AbstractScene {
 	}
 
 	field time = 0;
+
 	field pos = [0.0, -0.5, 1.0];
 	field vel = [0.0, 0.0];
+
 	field laserActiveCooldown = 0;
 	field lasers = [];
+
 	field spawnCooldown = SPAWN_MAX_COOLDOWN;
 	field spawnActiveCooldown = SPAWN_MAX_COOLDOWN;
 	field oddSpawn = true;
 	field enemies = [];
+
 	field debris = [];
+
+	field score = 0;
+	field scoreText = MainScene.font.render("0");
 
 	function update(inputManager, events) {
 		++this.time;
@@ -187,7 +197,6 @@ class MainScene : AbstractScene {
 		}
 		// Spawn enemies.
 		if (this.spawnCooldown > SPAWN_MIN_COOLDOWN && this.time % SPAWN_COOLDOWN_REDUCTION_FREQUENCY == 0) {
-			print(this.spawnCooldown);
 			--this.spawnCooldown;
 		}
 		if (this.spawnActiveCooldown > 0) {
@@ -234,6 +243,9 @@ class MainScene : AbstractScene {
 							, Random.randomInt(DEBRIS_MIN_LIFETIME, DEBRIS_MAX_LIFETIME + 1)
 							));
 					}
+					// Update score.
+					++this.score;
+					this.scoreText = MainScene.font.render(this.score);
 					// Destroy the enemy and the laser.
 					this.lasers.remove(laserIdx);
 					this.enemies.remove(enemyIdx);
@@ -336,5 +348,8 @@ class MainScene : AbstractScene {
 		## drawLine # MainScene.farTopRight # MainScene.farBottomRight ##;
 		## drawLine # MainScene.farBottomRight # MainScene.farBottomLeft ##;
 		## drawLine # MainScene.farBottomLeft # MainScene.farTopLeft ##;
+
+		// Draw score.
+		this.scoreText.draw(0.5 * (X_RES - this.scoreText.width), 0);
 	}
 }
