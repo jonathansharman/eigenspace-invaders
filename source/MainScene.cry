@@ -1,0 +1,558 @@
+import Audio;
+import Graphics2D;
+import Graphics2DText;
+import Math;
+import Random;
+import TwoCansAlpha4;
+
+class Enemy {
+	field pos;
+	field omega;
+
+	constructor(pos, omega) {
+		this.pos = pos;
+		this.omega = omega;
+	}
+}
+
+class Debris {
+	field pos;
+	field vel;
+	field omega;
+	field lifetime;
+
+	constructor(pos, vel, omega, lifetime) {
+		this.pos = pos;
+		this.vel = vel;
+		this.omega = omega;
+		this.lifetime = lifetime;
+	}
+}
+
+class Billboard {
+	field texture;
+	field pos;
+	// These fields are derived from texture and pos but useful to precompute.
+	field top;
+	field left;
+	field bottom;
+	field right;
+
+	constructor(texture, pos, scale) {
+		this.texture = texture;
+		this.pos = pos;
+		this.top = pos[1] + scale * this.texture.height / Y_RES;
+		this.left = pos[0] - scale * this.texture.width / X_RES;
+		this.bottom = pos[1] - scale * this.texture.height / Y_RES;
+		this.right = pos[0] + scale * this.texture.width / X_RES;
+	}
+
+	function draw() {
+		projectedTopLeft = [0.5 * X_RES * ([ this.left
+			, this.top
+			, this.pos[2]
+			][0] / [ this.left
+			, this.top
+			, this.pos[2]
+			][2] + 1.0), 0.5 * Y_RES * ([ this.left
+			, this.top
+			, this.pos[2]
+			][1] / -[ this.left
+			, this.top
+			, this.pos[2]
+			][2] + 1.0)];
+		projectedBottomRight = [0.5 * X_RES * ([ this.right
+			, this.bottom
+			, this.pos[2]
+			][0] / [ this.right
+			, this.bottom
+			, this.pos[2]
+			][2] + 1.0), 0.5 * Y_RES * ([ this.right
+			, this.bottom
+			, this.pos[2]
+			][1] / -[ this.right
+			, this.bottom
+			, this.pos[2]
+			][2] + 1.0)];
+		this.texture.drawStretched
+			( projectedTopLeft[0]
+			, projectedTopLeft[1]
+			, projectedBottomRight[0] - projectedTopLeft[0]
+			, projectedBottomRight[1] - projectedTopLeft[1]
+			);
+	}
+}
+
+class MainScene : AbstractScene {
+	static field farTopLeft = [0.5 * X_RES * ([-1.0, 1.0, MAX_Z][0] / [-1.0, 1.0, MAX_Z][2] + 1.0), 0.5 * Y_RES * ([-1.0, 1.0, MAX_Z][1] / -[-1.0, 1.0, MAX_Z][2] + 1.0)];
+	static field farTopRight = [0.5 * X_RES * ([1.0, 1.0, MAX_Z][0] / [1.0, 1.0, MAX_Z][2] + 1.0), 0.5 * Y_RES * ([1.0, 1.0, MAX_Z][1] / -[1.0, 1.0, MAX_Z][2] + 1.0)];
+	static field farBottomLeft = [0.5 * X_RES * ([-1.0, -1.0, MAX_Z][0] / [-1.0, -1.0, MAX_Z][2] + 1.0), 0.5 * Y_RES * ([-1.0, -1.0, MAX_Z][1] / -[-1.0, -1.0, MAX_Z][2] + 1.0)];
+	static field farBottomRight = [0.5 * X_RES * ([1.0, -1.0, MAX_Z][0] / [1.0, -1.0, MAX_Z][2] + 1.0), 0.5 * Y_RES * ([1.0, -1.0, MAX_Z][1] / -[1.0, -1.0, MAX_Z][2] + 1.0)];
+
+	static field font = FontResource.fromResource("Infinium Guardian.ttf").getRenderer()
+		.setSize(FONT_SIZE)
+		.setColor(0, 192, 0);
+
+	static constructor() {
+		// Force Sounds and Textures to preload their data to avoid missed frames later.
+		_ = Sounds.laser;
+		_ = Textures.heart;
+	}
+
+	field state = MOVEMENT_HELP_STATE;
+	field timeInState = 0;
+
+	field pos = [0.0, -0.5, MIN_Z];
+	field vel = [0.0, 0.0];
+
+	field laserActiveCooldown = 0;
+	field lasers = [];
+
+	field spawnCooldown = SPAWN_MAX_COOLDOWN;
+	field spawnActiveCooldown = SPAWN_MAX_COOLDOWN;
+	field oddSpawn = true;
+	field enemies = [];
+
+	field debris = [];
+
+	field score = 0;
+	field scoreText = MainScene.font.render("0");
+
+	field lives = MAX_LIVES;
+
+	field billboards =
+		[ new Billboard(Textures.title, [0.0, 0.75, MAX_Z], 2.0)
+		, new Billboard(Textures.shootingInstructions, [0.0, -0.20, MAX_Z], 2.0)
+		, new Billboard(Textures.generalInstructions, [0.0, -0.75, MAX_Z], 2.0)
+		];
+
+	function setState(state) {
+		this.state = state;
+		this.timeInState = 0;
+	}
+
+	function spawnDebris(center) {
+		for (i = 0; i < DEBRIS_CLUSTER_COUNT; ++i) {
+			this.debris.add(new Debris
+				( center.clone()
+				, [ DEBRIS_MAX_COMPONENT_SPEED * (1 - 2.0 * Random.randomFloat())
+				  , DEBRIS_MAX_COMPONENT_SPEED * (1 - 2.0 * Random.randomFloat())
+				  , DEBRIS_MAX_COMPONENT_SPEED * (1 - 2.0 * Random.randomFloat())
+				  ]
+				, DEBRIS_MAX_OMEGA * (1.0 - 2.0 * Random.randomFloat())
+				, Random.randomInt(DEBRIS_MIN_LIFETIME, DEBRIS_MAX_LIFETIME + 1)
+				));
+		}
+	}
+
+	function updateShip(inputManager) {
+		// Move.
+		if (inputManager.isKeyPressed(KeyboardKey.RIGHT)) {
+			this.vel[0] += LATERAL_ACCELERATION;
+		}
+		if (inputManager.isKeyPressed(KeyboardKey.LEFT)) {
+			this.vel[0] -= LATERAL_ACCELERATION;
+		}
+		if (inputManager.isKeyPressed(KeyboardKey.UP)) {
+			this.vel[1] += LATERAL_ACCELERATION;
+		}
+		if (inputManager.isKeyPressed(KeyboardKey.DOWN)) {
+			this.vel[1] -= LATERAL_ACCELERATION;
+		}
+		// Update position according to velocity.
+		this.pos[0] += this.vel[0];
+		this.pos[1] += this.vel[1];
+		// Apply drag.
+		this.vel[0] *= LATERAL_DRAG;
+		this.vel[1] *= LATERAL_DRAG;
+		// Keep the ship in bounds.
+		if (this.pos[0] < SHIP_MIN_X) {
+			this.pos[0] = SHIP_MIN_X;
+			this.vel[0] = 0.0;
+		} else if (this.pos[0] > SHIP_MAX_X) {
+			this.pos[0] = SHIP_MAX_X;
+			this.vel[0] = 0.0;
+		}
+		if (this.pos[1] < SHIP_MIN_Y) {
+			this.pos[1] = SHIP_MIN_Y;
+			this.vel[1] = 0.0;
+		} else if (this.pos[1] > SHIP_MAX_Y) {
+			this.pos[1] = SHIP_MAX_Y;
+			this.vel[1] = 0.0;
+		}
+		// Shoot lasers.
+		if (this.laserActiveCooldown > 0) {
+			--this.laserActiveCooldown;
+		}
+		if (this.laserActiveCooldown == 0 && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
+			Sounds.laser.play();
+			this.lasers.add([this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
+			this.lasers.add([this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]]);
+			this.laserActiveCooldown = LASER_COOLDOWN;
+		}
+	}
+
+	function updatePhysics() {
+		// Update laser positions.
+		for (i = 0; i < this.lasers.length; ++i) {
+			this.lasers[i][2] += LASER_SPEED;
+			if (this.lasers[i][2] > MAX_Z) {
+				this.lasers.remove(i);
+				--i;
+			}
+		}
+		// Update enemy positions.
+		for (i = 0; i < this.enemies.length; ++i) {
+			this.enemies[i].pos[2] -= ENEMY_SPEED;
+			// Check if enemy has reached the end.
+			if (this.enemies[i].pos[2] < MIN_Z) {
+				// Play bad explosion sound.
+				Sounds.explosion2.play();
+				// Spawn debris.
+				this.spawnDebris(this.enemies[i].pos);
+				// Destroy the enemy.
+				this.enemies.remove(i);
+				--i;
+				// Lose a life.
+				--this.lives;
+				// Game over if out of lives during playing state.
+				if (this.state == PLAYING_STATE && this.lives == 0) {
+					this.setState(GAME_OVER_STATE);
+					// Play game over sound.
+					Sounds.gameOver.play();
+					// Spawn debris.
+					this.spawnDebris(this.pos);
+				}
+			}
+		}
+		// Update debris.
+		for (i = 0; i < this.debris.length; ++i) {
+			debris = this.debris[i];
+			--debris.lifetime;
+			if (debris.lifetime == 0) {
+				this.debris.remove(i);
+				--i;
+				continue;
+			}
+			debris.pos[0] += debris.vel[0];
+			debris.pos[1] += debris.vel[1];
+			debris.pos[2] += debris.vel[2];
+		}
+		// Check for laser-enemy collisions.
+		for (laserIdx = 0; laserIdx < this.lasers.length; ++laserIdx) {
+			for (enemyIdx = 0; enemyIdx < this.enemies.length; ++enemyIdx) {
+				laserPos = this.lasers[laserIdx];
+				enemy = this.enemies[enemyIdx];
+				hit = enemy.pos[0] - ENEMY_RADIUS <= laserPos[0]
+					&& laserPos[0] <= enemy.pos[0] + ENEMY_RADIUS
+					&& enemy.pos[1] - ENEMY_RADIUS <= laserPos[1]
+					&& laserPos[1] <= enemy.pos[1] + ENEMY_RADIUS
+					&& enemy.pos[2] - ENEMY_RADIUS <= laserPos[2] + LASER_LENGTH
+					&& laserPos[2] <= enemy.pos[2] + ENEMY_RADIUS;
+				if (hit) {
+					// Play good explosion sound.
+					sound = Sounds.explosion1.play();
+					// Spawn debris.
+					this.spawnDebris(enemy.pos);
+					// Update score if in playing state.
+					if (this.state == PLAYING_STATE) {
+						++this.score;
+						this.scoreText = MainScene.font.render(this.score);
+					}
+					// Destroy the enemy and the laser.
+					this.lasers.remove(laserIdx);
+					this.enemies.remove(enemyIdx);
+					--laserIdx;
+					--enemyIdx;
+					break;
+				}
+			}
+		}
+	}
+
+	function updateEnemySpawning() {
+		// Reduce spawn cooldown periodically.
+		if (this.spawnCooldown > SPAWN_MIN_COOLDOWN && this.timeInState % SPAWN_COOLDOWN_REDUCTION_FREQUENCY == 0) {
+			--this.spawnCooldown;
+		}
+		// Reduce active spawn cooldown.
+		if (this.spawnActiveCooldown > 0) {
+			--this.spawnActiveCooldown;
+		}
+		// Spawn an enemy if not on cooldown.
+		if (this.spawnActiveCooldown == 0) {
+			if (this.oddSpawn) {
+				Sounds.spawn1.play();
+			} else {
+				Sounds.spawn2.play();
+			}
+			this.oddSpawn = !this.oddSpawn;
+			pos =
+				[ ENEMY_MIN_X + Random.randomFloat() * (ENEMY_MAX_X - ENEMY_MIN_X)
+				, ENEMY_MIN_Y + Random.randomFloat() * (ENEMY_MAX_Y - ENEMY_MIN_Y)
+				, MAX_Z
+				];
+			this.enemies.add(new Enemy(pos, ENEMY_MAX_OMEGA * (1.0 - 2.0 * Random.randomFloat())));
+			this.spawnActiveCooldown = this.spawnCooldown;
+		}
+	}
+
+	function update(inputManager, events) {
+		++this.timeInState;
+		this.updatePhysics();
+		switch (this.state) {
+			case MOVEMENT_HELP_STATE:
+				this.updateShip(inputManager);
+				arrowKeyPressed = inputManager.isKeyPressed(KeyboardKey.RIGHT)
+					|| inputManager.isKeyPressed(KeyboardKey.LEFT)
+					|| inputManager.isKeyPressed(KeyboardKey.UP)
+					|| inputManager.isKeyPressed(KeyboardKey.DOWN);
+				if (arrowKeyPressed) {
+					Music.loadFromResource("title.ogg").play(false);
+					this.setState(TITLE_STATE);
+				}
+				break;
+			case TITLE_STATE:
+				this.updateShip(inputManager);
+				// Compute z-coordinate of billboards.
+				z = MAX_Z - (MAX_Z - TITLE_Z_MIN) * Math.min(1.0, this.timeInState / TITLE_ZOOM_DURATION);
+				for (billboard : this.billboards) {
+					billboard.pos[2] = z;
+				}
+				// Check for laser-billboard collisions.
+				for (laserIdx = 0; laserIdx < this.lasers.length; ++laserIdx) {
+					for (billboardIdx = 0; billboardIdx < this.billboards.length; ++billboardIdx) {
+						laserPos = this.lasers[laserIdx];
+						billboard = this.billboards[billboardIdx];
+						hit = billboard.left <= laserPos[0]
+							&& laserPos[0] <= billboard.right
+							&& billboard.bottom <= laserPos[1]
+							&& laserPos[1] <= billboard.top
+							&& billboard.pos[2] <= laserPos[2] + LASER_LENGTH
+							&& laserPos[2] <= billboard.pos[2];
+						if (hit) {
+							// Play good explosion sound.
+							sound = Sounds.explosion1.play();
+							// Spawn debris.
+							this.spawnDebris(billboard.pos);
+							for (i = 0; i < DEBRIS_BILLBOARD_CLUSTERS; ++i) {
+								this.spawnDebris(
+									[ billboard.left + Random.randomFloat() * (billboard.right - billboard.left)
+									, billboard.bottom + Random.randomFloat() * (billboard.top - billboard.bottom)
+									, billboard.pos[2]
+									]);
+							}
+							// Update score if in playing state.
+							if (this.state == PLAYING_STATE) {
+								++this.score;
+								this.scoreText = MainScene.font.render(this.score);
+							}
+							// Destroy the billboard and the laser.
+							this.lasers.remove(laserIdx);
+							this.billboards.remove(billboardIdx);
+							--laserIdx;
+							--billboardIdx;
+							break;
+						}
+					}
+				}
+				// Start playing when the player destroys all the billboards.
+				if (this.billboards.length == 0) {
+					this.setState(PLAYING_STATE);
+				}
+				break;
+			case PLAYING_STATE:
+				this.updateShip(inputManager);
+				this.updateEnemySpawning();
+				break;
+			case GAME_OVER_STATE:
+				break;
+		}
+	}
+
+	function drawShip() {
+		left = [0.5 * X_RES * ([this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]][0] / [this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]][2] + 1.0), 0.5 * Y_RES * ([this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]][1] / -[this.pos[0] - SHIP_HALF_WIDTH, this.pos[1], this.pos[2]][2] + 1.0)];
+		right = [0.5 * X_RES * ([this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]][0] / [this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]][2] + 1.0), 0.5 * Y_RES * ([this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]][1] / -[this.pos[0] + SHIP_HALF_WIDTH, this.pos[1], this.pos[2]][2] + 1.0)];
+		top = [0.5 * X_RES * ([this.pos[0], this.pos[1] + SHIP_HALF_HEIGHT, this.pos[2]][0] / [this.pos[0], this.pos[1] + SHIP_HALF_HEIGHT, this.pos[2]][2] + 1.0), 0.5 * Y_RES * ([this.pos[0], this.pos[1] + SHIP_HALF_HEIGHT, this.pos[2]][1] / -[this.pos[0], this.pos[1] + SHIP_HALF_HEIGHT, this.pos[2]][2] + 1.0)];
+		bottom = [0.5 * X_RES * ([this.pos[0], this.pos[1] - SHIP_HALF_HEIGHT, this.pos[2]][0] / [this.pos[0], this.pos[1] - SHIP_HALF_HEIGHT, this.pos[2]][2] + 1.0), 0.5 * Y_RES * ([this.pos[0], this.pos[1] - SHIP_HALF_HEIGHT, this.pos[2]][1] / -[this.pos[0], this.pos[1] - SHIP_HALF_HEIGHT, this.pos[2]][2] + 1.0)];
+		front = [0.5 * X_RES * ([ this.pos[0] + TILT_FACTOR * this.vel[0]
+			, this.pos[1] + TILT_FACTOR * this.vel[1]
+			, this.pos[2] + SHIP_LENGTH
+			][0] / [ this.pos[0] + TILT_FACTOR * this.vel[0]
+			, this.pos[1] + TILT_FACTOR * this.vel[1]
+			, this.pos[2] + SHIP_LENGTH
+			][2] + 1.0), 0.5 * Y_RES * ([ this.pos[0] + TILT_FACTOR * this.vel[0]
+			, this.pos[1] + TILT_FACTOR * this.vel[1]
+			, this.pos[2] + SHIP_LENGTH
+			][1] / -[ this.pos[0] + TILT_FACTOR * this.vel[0]
+			, this.pos[1] + TILT_FACTOR * this.vel[1]
+			, this.pos[2] + SHIP_LENGTH
+			][2] + 1.0)];
+		Graphics2D.Draw.line(left[0], left[1], top[0], top[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line(top[0], top[1], right[0], right[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line(right[0], right[1], bottom[0], bottom[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line(bottom[0], bottom[1], left[0], left[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line(left[0], left[1], front[0], front[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line(right[0], right[1], front[0], front[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line(top[0], top[1], front[0], front[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line(bottom[0], bottom[1], front[0], front[1], 2, 0, 192, 0);
+	}
+
+	// Draws lasers within given z-bounds. Null bounds are ignored.
+	//
+	// Laser drawing is treated specially like this in order to achieve z-ordering with billboards.
+	function drawLasers(zMin, zMax) {
+		for (pos : this.lasers) {
+			// Skip lasers whose centers are past the specified z-bounds.
+			zCenter = pos[2] + 0.5 * LASER_LENGTH;
+			if ((zMin != null && zCenter < zMin) || (zMax != null && zCenter > zMax)) {
+				continue;
+			}
+			start = [0.5 * X_RES * (pos[0] / pos[2] + 1.0), 0.5 * Y_RES * (pos[1] / -pos[2] + 1.0)];
+			end = [0.5 * X_RES * ([pos[0], pos[1], pos[2] + LASER_LENGTH][0] / [pos[0], pos[1], pos[2] + LASER_LENGTH][2] + 1.0), 0.5 * Y_RES * ([pos[0], pos[1], pos[2] + LASER_LENGTH][1] / -[pos[0], pos[1], pos[2] + LASER_LENGTH][2] + 1.0)];
+			Graphics2D.Draw.line(start[0], start[1], end[0], end[1], 2, 0, 192, 0);
+		}
+	}
+
+	// Draws entities common to all states.
+	function drawCommon() {
+		// Draw box around world.
+		Graphics2D.Draw.line([0.0, 0.0][0], [0.0, 0.0][1], MainScene.farTopLeft[0], MainScene.farTopLeft[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line([X_RES, 0.0][0], [X_RES, 0.0][1], MainScene.farTopRight[0], MainScene.farTopRight[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line([0.0, Y_RES][0], [0.0, Y_RES][1], MainScene.farBottomLeft[0], MainScene.farBottomLeft[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line([X_RES, Y_RES][0], [X_RES, Y_RES][1], MainScene.farBottomRight[0], MainScene.farBottomRight[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line(MainScene.farTopLeft[0], MainScene.farTopLeft[1], MainScene.farTopRight[0], MainScene.farTopRight[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line(MainScene.farTopRight[0], MainScene.farTopRight[1], MainScene.farBottomRight[0], MainScene.farBottomRight[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line(MainScene.farBottomRight[0], MainScene.farBottomRight[1], MainScene.farBottomLeft[0], MainScene.farBottomLeft[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line(MainScene.farBottomLeft[0], MainScene.farBottomLeft[1], MainScene.farTopLeft[0], MainScene.farTopLeft[1], 2, 0, 192, 0);
+
+		// Draw enemies.
+		for (enemy : this.enemies) {
+			pos = enemy.pos;
+			theta = this.timeInState * enemy.omega;
+			cosT = Math.cos(theta);
+			sinT = Math.sin(theta);
+			cosT90 = Math.cos(theta + 0.5 * Math.PI);
+			sinT90 = Math.sin(theta + 0.5 * Math.PI);
+			left = [0.5 * X_RES * ([pos[0] - ENEMY_RADIUS * cosT, pos[1] - ENEMY_RADIUS * sinT, pos[2]][0] / [pos[0] - ENEMY_RADIUS * cosT, pos[1] - ENEMY_RADIUS * sinT, pos[2]][2] + 1.0), 0.5 * Y_RES * ([pos[0] - ENEMY_RADIUS * cosT, pos[1] - ENEMY_RADIUS * sinT, pos[2]][1] / -[pos[0] - ENEMY_RADIUS * cosT, pos[1] - ENEMY_RADIUS * sinT, pos[2]][2] + 1.0)];
+			right = [0.5 * X_RES * ([pos[0] + ENEMY_RADIUS * cosT, pos[1] + ENEMY_RADIUS * sinT, pos[2]][0] / [pos[0] + ENEMY_RADIUS * cosT, pos[1] + ENEMY_RADIUS * sinT, pos[2]][2] + 1.0), 0.5 * Y_RES * ([pos[0] + ENEMY_RADIUS * cosT, pos[1] + ENEMY_RADIUS * sinT, pos[2]][1] / -[pos[0] + ENEMY_RADIUS * cosT, pos[1] + ENEMY_RADIUS * sinT, pos[2]][2] + 1.0)];
+			top = [0.5 * X_RES * ([pos[0] + ENEMY_RADIUS * cosT90, pos[1] + ENEMY_RADIUS * sinT90, pos[2]][0] / [pos[0] + ENEMY_RADIUS * cosT90, pos[1] + ENEMY_RADIUS * sinT90, pos[2]][2] + 1.0), 0.5 * Y_RES * ([pos[0] + ENEMY_RADIUS * cosT90, pos[1] + ENEMY_RADIUS * sinT90, pos[2]][1] / -[pos[0] + ENEMY_RADIUS * cosT90, pos[1] + ENEMY_RADIUS * sinT90, pos[2]][2] + 1.0)];
+			bottom = [0.5 * X_RES * ([pos[0] - ENEMY_RADIUS * cosT90, pos[1] - ENEMY_RADIUS * sinT90, pos[2]][0] / [pos[0] - ENEMY_RADIUS * cosT90, pos[1] - ENEMY_RADIUS * sinT90, pos[2]][2] + 1.0), 0.5 * Y_RES * ([pos[0] - ENEMY_RADIUS * cosT90, pos[1] - ENEMY_RADIUS * sinT90, pos[2]][1] / -[pos[0] - ENEMY_RADIUS * cosT90, pos[1] - ENEMY_RADIUS * sinT90, pos[2]][2] + 1.0)];
+			front = [0.5 * X_RES * ([pos[0], pos[1], pos[2] - ENEMY_HALF_LENGTH][0] / [pos[0], pos[1], pos[2] - ENEMY_HALF_LENGTH][2] + 1.0), 0.5 * Y_RES * ([pos[0], pos[1], pos[2] - ENEMY_HALF_LENGTH][1] / -[pos[0], pos[1], pos[2] - ENEMY_HALF_LENGTH][2] + 1.0)];
+			back = [0.5 * X_RES * ([pos[0], pos[1], pos[2] + ENEMY_HALF_LENGTH][0] / [pos[0], pos[1], pos[2] + ENEMY_HALF_LENGTH][2] + 1.0), 0.5 * Y_RES * ([pos[0], pos[1], pos[2] + ENEMY_HALF_LENGTH][1] / -[pos[0], pos[1], pos[2] + ENEMY_HALF_LENGTH][2] + 1.0)];
+			Graphics2D.Draw.line(left[0], left[1], top[0], top[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(top[0], top[1], right[0], right[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(right[0], right[1], bottom[0], bottom[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(bottom[0], bottom[1], left[0], left[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(left[0], left[1], front[0], front[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(top[0], top[1], front[0], front[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(right[0], right[1], front[0], front[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(bottom[0], bottom[1], front[0], front[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(left[0], left[1], back[0], back[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(top[0], top[1], back[0], back[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(right[0], right[1], back[0], back[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(bottom[0], bottom[1], back[0], back[1], 2, 0, 192, 0);
+		}
+
+		// Draw debris.
+		for (debris : this.debris) {
+			pos = debris.pos;
+			theta = this.timeInState * debris.omega;
+			radius = DEBRIS_RADIUS * debris.lifetime / DEBRIS_MAX_LIFETIME;
+			right = [0.5 * X_RES * ([ pos[0] + radius * Math.cos(theta)
+				, pos[1] + radius * Math.sin(theta)
+				, pos[2]
+				][0] / [ pos[0] + radius * Math.cos(theta)
+				, pos[1] + radius * Math.sin(theta)
+				, pos[2]
+				][2] + 1.0), 0.5 * Y_RES * ([ pos[0] + radius * Math.cos(theta)
+				, pos[1] + radius * Math.sin(theta)
+				, pos[2]
+				][1] / -[ pos[0] + radius * Math.cos(theta)
+				, pos[1] + radius * Math.sin(theta)
+				, pos[2]
+				][2] + 1.0)];
+			topLeft = [0.5 * X_RES * ([ pos[0] + radius * Math.cos(theta + ONE_THIRD_TAU)
+				, pos[1] + radius * Math.sin(theta + ONE_THIRD_TAU)
+				, pos[2]
+				][0] / [ pos[0] + radius * Math.cos(theta + ONE_THIRD_TAU)
+				, pos[1] + radius * Math.sin(theta + ONE_THIRD_TAU)
+				, pos[2]
+				][2] + 1.0), 0.5 * Y_RES * ([ pos[0] + radius * Math.cos(theta + ONE_THIRD_TAU)
+				, pos[1] + radius * Math.sin(theta + ONE_THIRD_TAU)
+				, pos[2]
+				][1] / -[ pos[0] + radius * Math.cos(theta + ONE_THIRD_TAU)
+				, pos[1] + radius * Math.sin(theta + ONE_THIRD_TAU)
+				, pos[2]
+				][2] + 1.0)];
+			bottomLeft = [0.5 * X_RES * ([ pos[0] + radius * Math.cos(theta + TWO_THIRDS_TAU)
+				, pos[1] + radius * Math.sin(theta + TWO_THIRDS_TAU)
+				, pos[2]
+				][0] / [ pos[0] + radius * Math.cos(theta + TWO_THIRDS_TAU)
+				, pos[1] + radius * Math.sin(theta + TWO_THIRDS_TAU)
+				, pos[2]
+				][2] + 1.0), 0.5 * Y_RES * ([ pos[0] + radius * Math.cos(theta + TWO_THIRDS_TAU)
+				, pos[1] + radius * Math.sin(theta + TWO_THIRDS_TAU)
+				, pos[2]
+				][1] / -[ pos[0] + radius * Math.cos(theta + TWO_THIRDS_TAU)
+				, pos[1] + radius * Math.sin(theta + TWO_THIRDS_TAU)
+				, pos[2]
+				][2] + 1.0)];
+			Graphics2D.Draw.line(right[0], right[1], topLeft[0], topLeft[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(topLeft[0], topLeft[1], bottomLeft[0], bottomLeft[1], 2, 0, 192, 0);
+			Graphics2D.Draw.line(bottomLeft[0], bottomLeft[1], right[0], right[1], 2, 0, 192, 0);
+		}
+	}
+
+	function drawHUD() {
+		// Draw score.
+		this.scoreText.draw(0.5 * X_RES - this.scoreText.width, 0);
+
+		// Draw lives.
+		for (i = 0; i < this.lives; ++i) {
+			Textures.heart.draw
+				( 0.5 * X_RES + HEART_LEFT_PAD + i * (HEART_LEFT_PAD + Textures.heart.width)
+				, HEART_TOP_PAD
+				);
+		}
+	}
+
+	function render() {
+		Graphics2D.Draw.fill(0, 0, 0);
+
+		this.drawCommon();
+		switch (this.state) {
+			case MOVEMENT_HELP_STATE:
+				this.drawLasers(null, null);
+				this.drawShip();
+				Textures.movementHelp.draw
+					( 0.5 * (X_RES - Textures.movementHelp.width)
+					, 0.75 * Y_RES - 0.5 * Textures.movementHelp.height
+					);
+				break;
+			case TITLE_STATE:
+				// Get any billboard's z-coordinate, if any (all billboards have the same z-coordinate).
+				z = this.billboards.length > 0 ? this.billboards[0].pos[2] : null;
+				// Draw lasers that are behind the billboards.
+				this.drawLasers(z, null);
+				// Draw billboards.
+				for (billboard : this.billboards) {
+					billboard.draw();
+				}
+				// Draw lasers that are in front of the billboards.
+				this.drawLasers(null, z);
+				// Draw the ship in front of the billboards.
+				this.drawShip();
+				break;
+			case PLAYING_STATE:
+				this.drawLasers(null, null);
+				this.drawShip();
+				this.drawHUD();
+				break;
+			case GAME_OVER_STATE:
+				this.drawLasers(null, null);
+				this.drawHUD();
+				break;
+		}
+	}
+}

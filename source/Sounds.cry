@@ -1,0 +1,11 @@
+import Audio;
+import TwoCansAlpha4;
+
+static class Sounds {
+	static field laser = Audio.SoundResource.loadFromResource("laser.ogg");
+	static field explosion1 = Audio.SoundResource.loadFromResource("explosion1.ogg");
+	static field explosion2 = Audio.SoundResource.loadFromResource("explosion2.ogg");
+	static field spawn1 = Audio.SoundResource.loadFromResource("spawn1.ogg");
+	static field spawn2 = Audio.SoundResource.loadFromResource("spawn2.ogg");
+	static field gameOver = Audio.SoundResource.loadFromResource("game-over.ogg");
+}

@@ -1,0 +1,79 @@
+import Math;
+import TwoCansAlpha4;
+
+// Game states
+const MOVEMENT_HELP_STATE = 0;
+const TITLE_STATE = 1;
+const PLAYING_STATE = 2;
+const GAME_OVER_STATE = 3;
+
+// Screen dimensions
+const X_RES = $var["screen_width"];
+const Y_RES = $var["screen_height"];
+
+// Math
+const ONE_THIRD_TAU = 2.0 * Math.PI / 3.0;
+const TWO_THIRDS_TAU = 2.0 * ONE_THIRD_TAU;
+
+// Fonts
+const FONT_SIZE = 16;
+
+// Game area bounds
+const MIN_X = -1.0;
+const MAX_X = 1.0;
+const MIN_Y = -1.0;
+const MAX_Y = 1.0;
+const MIN_Z = 1.0;
+const MAX_Z = 10.0;
+
+// Controls
+const LATERAL_ACCELERATION = 0.01;
+const LATERAL_DRAG = 0.9;
+
+// Ship
+const SHIP_HALF_WIDTH = 0.2;
+const SHIP_HALF_HEIGHT = 0.1;
+const SHIP_LENGTH = 0.4;
+const TILT_FACTOR = 3.0;
+const SHIP_MIN_X = MIN_X + SHIP_HALF_WIDTH;
+const SHIP_MAX_X = MAX_X - SHIP_HALF_WIDTH;
+const SHIP_MIN_Y = MIN_Y + SHIP_HALF_HEIGHT;
+const SHIP_MAX_Y = MAX_Y - SHIP_HALF_HEIGHT;
+
+// Lasers
+const LASER_LENGTH = 0.4;
+const LASER_SPEED = 0.3;
+const LASER_COOLDOWN = 15;
+
+// Enemies
+const ENEMY_RADIUS = 0.2;
+const ENEMY_HALF_LENGTH = 0.2;
+const ENEMY_SPEED = 0.05;
+const ENEMY_MIN_X = -1.0 + ENEMY_RADIUS;
+const ENEMY_MAX_X = 1.0 - ENEMY_RADIUS;
+const ENEMY_MIN_Y = -1.0 + ENEMY_RADIUS;
+const ENEMY_MAX_Y = 1.0 - ENEMY_RADIUS;
+const ENEMY_MAX_OMEGA = 0.3;
+
+// Enemy spawning
+const SPAWN_MAX_COOLDOWN = 4 * LASER_COOLDOWN;
+const SPAWN_MIN_COOLDOWN = LASER_COOLDOWN;
+const SPAWN_COOLDOWN_REDUCTION_FREQUENCY = 200;
+
+// Debris
+const DEBRIS_RADIUS = 0.1;
+const DEBRIS_CLUSTER_COUNT = 10;
+const DEBRIS_MAX_OMEGA = 0.6;
+const DEBRIS_MAX_COMPONENT_SPEED = 0.02;
+const DEBRIS_MIN_LIFETIME = 10;
+const DEBRIS_MAX_LIFETIME = 30;
+const DEBRIS_BILLBOARD_CLUSTERS = 10;
+
+// Lives
+const MAX_LIVES = 3;
+const HEART_TOP_PAD = 5.0;
+const HEART_LEFT_PAD = 5.0;
+
+// Title screen
+const TITLE_ZOOM_DURATION = 50.0;
+const TITLE_Z_MIN = 2.0;
