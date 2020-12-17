@@ -1,7 +1,7 @@
 ﻿{
 	"title": "Eigenspace Invaders",
 	"id": "EigenspaceInvaders",
-	"description": "Color perception game.",
+	"description": "3D Space Invaders.",
 	"icons": ["assets/icon200.png"],
 
 	"deps": [
