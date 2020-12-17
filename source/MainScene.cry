@@ -104,6 +104,9 @@ class MainScene : AbstractScene {
 	field pos = [0.0, -0.5, MIN_Z];
 	field vel = [0.0, 0.0];
 
+	field starActiveCooldown = 0;
+	field stars = [];
+
 	field laserActiveCooldown = 0;
 	field lasers = [];
 
@@ -202,6 +205,35 @@ class MainScene : AbstractScene {
 	}
 
 	function updatePhysics() {
+		// Spawn and update stars.
+		if (this.starActiveCooldown > 0) {
+			--this.starActiveCooldown;
+		}
+		if (this.starActiveCooldown == 0) {
+			// Randomly spawn on the top, left, right, or bottom plane.
+			switch (Random.randomInt(0, 4)) {
+				case 0:
+					this.stars.add([-1.0, 1.0 - 2.0 * Random.randomFloat(), MAX_Z]);
+					break;
+				case 1:
+					this.stars.add([1.0, 1.0 - 2.0 * Random.randomFloat(), MAX_Z]);
+					break;
+				case 2:
+					this.stars.add([1.0 - 2.0 * Random.randomFloat(), 1.0, MAX_Z]);
+					break;
+				case 3:
+					this.stars.add([1.0 - 2.0 * Random.randomFloat(), -1.0, MAX_Z]);
+					break;
+			}
+			this.starActiveCooldown = STAR_COOLDOWN;
+		}
+		for (i = 0; i < this.stars.length; ++i) {
+			this.stars[i][2] -= STAR_SPEED;
+			if (this.stars[i][2] < MIN_Z) {
+				this.stars.remove(i);
+				--i;
+			}
+		}
 		// Update laser positions.
 		for (i = 0; i < this.lasers.length; ++i) {
 			this.lasers[i][2] += LASER_SPEED;
@@ -451,14 +483,21 @@ class MainScene : AbstractScene {
 	// Draws entities common to all states.
 	function drawCommon() {
 		// Draw box around world.
-		Graphics2D.Draw.line([0.0, 0.0][0], [0.0, 0.0][1], MainScene.farTopLeft[0], MainScene.farTopLeft[1], 2, 0, 192, 0);
-		Graphics2D.Draw.line([X_RES, 0.0][0], [X_RES, 0.0][1], MainScene.farTopRight[0], MainScene.farTopRight[1], 2, 0, 192, 0);
-		Graphics2D.Draw.line([0.0, Y_RES][0], [0.0, Y_RES][1], MainScene.farBottomLeft[0], MainScene.farBottomLeft[1], 2, 0, 192, 0);
-		Graphics2D.Draw.line([X_RES, Y_RES][0], [X_RES, Y_RES][1], MainScene.farBottomRight[0], MainScene.farBottomRight[1], 2, 0, 192, 0);
-		Graphics2D.Draw.line(MainScene.farTopLeft[0], MainScene.farTopLeft[1], MainScene.farTopRight[0], MainScene.farTopRight[1], 2, 0, 192, 0);
-		Graphics2D.Draw.line(MainScene.farTopRight[0], MainScene.farTopRight[1], MainScene.farBottomRight[0], MainScene.farBottomRight[1], 2, 0, 192, 0);
-		Graphics2D.Draw.line(MainScene.farBottomRight[0], MainScene.farBottomRight[1], MainScene.farBottomLeft[0], MainScene.farBottomLeft[1], 2, 0, 192, 0);
-		Graphics2D.Draw.line(MainScene.farBottomLeft[0], MainScene.farBottomLeft[1], MainScene.farTopLeft[0], MainScene.farTopLeft[1], 2, 0, 192, 0);
+		Graphics2D.Draw.line([0.0, 0.0][0], [0.0, 0.0][1], MainScene.farTopLeft[0], MainScene.farTopLeft[1], 2, 0, 128, 0);
+		Graphics2D.Draw.line([X_RES, 0.0][0], [X_RES, 0.0][1], MainScene.farTopRight[0], MainScene.farTopRight[1], 2, 0, 128, 0);
+		Graphics2D.Draw.line([0.0, Y_RES][0], [0.0, Y_RES][1], MainScene.farBottomLeft[0], MainScene.farBottomLeft[1], 2, 0, 128, 0);
+		Graphics2D.Draw.line([X_RES, Y_RES][0], [X_RES, Y_RES][1], MainScene.farBottomRight[0], MainScene.farBottomRight[1], 2, 0, 128, 0);
+		Graphics2D.Draw.line(MainScene.farTopLeft[0], MainScene.farTopLeft[1], MainScene.farTopRight[0], MainScene.farTopRight[1], 2, 0, 128, 0);
+		Graphics2D.Draw.line(MainScene.farTopRight[0], MainScene.farTopRight[1], MainScene.farBottomRight[0], MainScene.farBottomRight[1], 2, 0, 128, 0);
+		Graphics2D.Draw.line(MainScene.farBottomRight[0], MainScene.farBottomRight[1], MainScene.farBottomLeft[0], MainScene.farBottomLeft[1], 2, 0, 128, 0);
+		Graphics2D.Draw.line(MainScene.farBottomLeft[0], MainScene.farBottomLeft[1], MainScene.farTopLeft[0], MainScene.farTopLeft[1], 2, 0, 128, 0);
+
+		// Draw stars.
+		for (pos : this.stars) {
+			start = [0.5 * X_RES * (pos[0] / pos[2] + 1.0), 0.5 * Y_RES * (pos[1] / -pos[2] + 1.0)];
+			end = [0.5 * X_RES * ([pos[0], pos[1], pos[2] - STAR_LENGTH][0] / [pos[0], pos[1], pos[2] - STAR_LENGTH][2] + 1.0), 0.5 * Y_RES * ([pos[0], pos[1], pos[2] - STAR_LENGTH][1] / -[pos[0], pos[1], pos[2] - STAR_LENGTH][2] + 1.0)];
+			Graphics2D.Draw.line(start[0], start[1], end[0], end[1], 2, 0, 128, 0);
+		}
 
 		// Draw enemies.
 		for (enemy : this.enemies) {

@@ -40,6 +40,11 @@ const SHIP_MAX_X = MAX_X - SHIP_HALF_WIDTH;
 const SHIP_MIN_Y = MIN_Y + SHIP_HALF_HEIGHT;
 const SHIP_MAX_Y = MAX_Y - SHIP_HALF_HEIGHT;
 
+// Stars
+const STAR_LENGTH = 0.1;
+const STAR_SPEED = 0.1;
+const STAR_COOLDOWN = 2;
+
 // Lasers
 const LASER_LENGTH = 0.4;
 const LASER_SPEED = 0.3;

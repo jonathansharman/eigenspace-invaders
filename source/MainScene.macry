@@ -88,6 +88,9 @@ class MainScene : AbstractScene {
 	field pos = [0.0, -0.5, MIN_Z];
 	field vel = [0.0, 0.0];
 
+	field starActiveCooldown = 0;
+	field stars = [];
+
 	field laserActiveCooldown = 0;
 	field lasers = [];
 
@@ -186,6 +189,35 @@ class MainScene : AbstractScene {
 	}
 
 	function updatePhysics() {
+		// Spawn and update stars.
+		if (this.starActiveCooldown > 0) {
+			--this.starActiveCooldown;
+		}
+		if (this.starActiveCooldown == 0) {
+			// Randomly spawn on the top, left, right, or bottom plane.
+			switch (Random.randomInt(0, 4)) {
+				case 0:
+					this.stars.add([-1.0, 1.0 - 2.0 * Random.randomFloat(), MAX_Z]);
+					break;
+				case 1:
+					this.stars.add([1.0, 1.0 - 2.0 * Random.randomFloat(), MAX_Z]);
+					break;
+				case 2:
+					this.stars.add([1.0 - 2.0 * Random.randomFloat(), 1.0, MAX_Z]);
+					break;
+				case 3:
+					this.stars.add([1.0 - 2.0 * Random.randomFloat(), -1.0, MAX_Z]);
+					break;
+			}
+			this.starActiveCooldown = STAR_COOLDOWN;
+		}
+		for (i = 0; i < this.stars.length; ++i) {
+			this.stars[i][2] -= STAR_SPEED;
+			if (this.stars[i][2] < MIN_Z) {
+				this.stars.remove(i);
+				--i;
+			}
+		}
 		// Update laser positions.
 		for (i = 0; i < this.lasers.length; ++i) {
 			this.lasers[i][2] += LASER_SPEED;
@@ -427,14 +459,21 @@ class MainScene : AbstractScene {
 	// Draws entities common to all states.
 	function drawCommon() {
 		// Draw box around world.
-		## drawLine # [0.0, 0.0] # MainScene.farTopLeft ##;
-		## drawLine # [X_RES, 0.0] # MainScene.farTopRight ##;
-		## drawLine # [0.0, Y_RES] # MainScene.farBottomLeft ##;
-		## drawLine # [X_RES, Y_RES] # MainScene.farBottomRight ##;
-		## drawLine # MainScene.farTopLeft # MainScene.farTopRight ##;
-		## drawLine # MainScene.farTopRight # MainScene.farBottomRight ##;
-		## drawLine # MainScene.farBottomRight # MainScene.farBottomLeft ##;
-		## drawLine # MainScene.farBottomLeft # MainScene.farTopLeft ##;
+		## drawDarkLine # [0.0, 0.0] # MainScene.farTopLeft ##;
+		## drawDarkLine # [X_RES, 0.0] # MainScene.farTopRight ##;
+		## drawDarkLine # [0.0, Y_RES] # MainScene.farBottomLeft ##;
+		## drawDarkLine # [X_RES, Y_RES] # MainScene.farBottomRight ##;
+		## drawDarkLine # MainScene.farTopLeft # MainScene.farTopRight ##;
+		## drawDarkLine # MainScene.farTopRight # MainScene.farBottomRight ##;
+		## drawDarkLine # MainScene.farBottomRight # MainScene.farBottomLeft ##;
+		## drawDarkLine # MainScene.farBottomLeft # MainScene.farTopLeft ##;
+
+		// Draw stars.
+		for (pos : this.stars) {
+			start = ## project # pos ##;
+			end = ## project # [pos[0], pos[1], pos[2] - STAR_LENGTH] ##;
+			## drawDarkLine # start # end ##;
+		}
 
 		// Draw enemies.
 		for (enemy : this.enemies) {
