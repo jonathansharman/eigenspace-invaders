@@ -5,6 +5,8 @@ import Math;
 import Random;
 import TwoCansAlpha4;
 
+enum State { MOVEMENT_HELP, TITLE, PLAYING, GAME_OVER }
+
 class Enemy {
 	field pos;
 	field omega;
@@ -82,7 +84,7 @@ class MainScene : AbstractScene {
 		_ = Sounds.laser;
 	}
 
-	field state = MOVEMENT_HELP_STATE;
+	field state = State.MOVEMENT_HELP;
 	field timeInState = 0;
 
 	field pos = [0.0, -0.5, MIN_Z];
@@ -241,8 +243,8 @@ class MainScene : AbstractScene {
 				// Lose a life.
 				--this.lives;
 				// Game over if out of lives during playing state.
-				if (this.state == PLAYING_STATE && this.lives == 0) {
-					this.setState(GAME_OVER_STATE);
+				if (this.state == State.PLAYING && this.lives == 0) {
+					this.setState(State.GAME_OVER);
 					// Play game over sound.
 					Sounds.gameOver.play();
 					// Spawn debris from the ship.
@@ -287,7 +289,7 @@ class MainScene : AbstractScene {
 					// Spawn debris.
 					this.spawnDebris(enemy.pos);
 					// Update score if in playing state.
-					if (this.state == PLAYING_STATE) {
+					if (this.state == State.PLAYING) {
 						++this.score;
 						this.scoreText = MainScene.font.render(this.score);
 					}
@@ -333,7 +335,7 @@ class MainScene : AbstractScene {
 		++this.timeInState;
 		this.updatePhysics();
 		switch (this.state) {
-			case MOVEMENT_HELP_STATE:
+			case State.MOVEMENT_HELP:
 				this.updateShip(inputManager);
 				arrowKeyPressed = inputManager.isKeyPressed(KeyboardKey.RIGHT)
 					|| inputManager.isKeyPressed(KeyboardKey.LEFT)
@@ -341,10 +343,10 @@ class MainScene : AbstractScene {
 					|| inputManager.isKeyPressed(KeyboardKey.DOWN);
 				if (arrowKeyPressed) {
 					Music.loadFromResource("title.ogg").play(false);
-					this.setState(TITLE_STATE);
+					this.setState(State.TITLE);
 				}
 				break;
-			case TITLE_STATE:
+			case State.TITLE:
 				this.updateShip(inputManager);
 				// Compute z-coordinate of billboards.
 				z = MAX_Z - (MAX_Z - TITLE_Z_MIN) * Math.min(1.0, this.timeInState / TITLE_ZOOM_DURATION);
@@ -368,7 +370,7 @@ class MainScene : AbstractScene {
 							// Spawn debris.
 							this.spawnBillboardDebris(billboard);
 							// Update score if in playing state.
-							if (this.state == PLAYING_STATE) {
+							if (this.state == State.PLAYING) {
 								++this.score;
 								this.scoreText = MainScene.font.render(this.score);
 							}
@@ -383,14 +385,14 @@ class MainScene : AbstractScene {
 				}
 				// Start playing when the player destroys all the billboards.
 				if (this.billboards.length == 0) {
-					this.setState(PLAYING_STATE);
+					this.setState(State.PLAYING);
 				}
 				break;
-			case PLAYING_STATE:
+			case State.PLAYING:
 				this.updateShip(inputManager);
 				this.updateEnemySpawning();
 				break;
-			case GAME_OVER_STATE:
+			case State.GAME_OVER:
 				// Compute z-coordinate of billboards.
 				z = MAX_Z - (MAX_Z - TITLE_Z_MIN) * Math.min(1.0, this.timeInState / TITLE_ZOOM_DURATION);
 				for (billboard : this.billboards) {
@@ -414,7 +416,7 @@ class MainScene : AbstractScene {
 					this.oddSpawn = true;
 					this.score = 0;
 					this.scoreText = MainScene.font.render("0");
-					this.setState(PLAYING_STATE);
+					this.setState(State.PLAYING);
 				}
 				break;
 		}
@@ -547,7 +549,7 @@ class MainScene : AbstractScene {
 
 		this.drawCommon();
 		switch (this.state) {
-			case MOVEMENT_HELP_STATE:
+			case State.MOVEMENT_HELP:
 				this.drawLasers(null, null);
 				this.drawShip();
 				Textures.movementHelp.draw
@@ -555,7 +557,7 @@ class MainScene : AbstractScene {
 					, 0.75 * Y_RES - 0.5 * Textures.movementHelp.height
 					);
 				break;
-			case TITLE_STATE:
+			case State.TITLE:
 				// Get any billboard's z-coordinate, if any (all billboards have the same z-coordinate).
 				z = this.billboards.length > 0 ? this.billboards[0].pos[2] : null;
 				// Draw lasers that are behind the billboards.
@@ -569,12 +571,12 @@ class MainScene : AbstractScene {
 				// Draw the ship in front of the billboards.
 				this.drawShip();
 				break;
-			case PLAYING_STATE:
+			case State.PLAYING:
 				this.drawLasers(null, null);
 				this.drawShip();
 				this.drawHUD();
 				break;
-			case GAME_OVER_STATE:
+			case State.GAME_OVER:
 				// Get the billboard's z-coordinate.
 				z = this.billboards.length > 0 ? this.billboards[0].pos[2] : null;
 				// Draw lasers that are behind the billboard.

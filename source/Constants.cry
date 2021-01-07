@@ -1,12 +1,6 @@
 import Math;
 import TwoCansAlpha4;
 
-// Game states
-const MOVEMENT_HELP_STATE = 0;
-const TITLE_STATE = 1;
-const PLAYING_STATE = 2;
-const GAME_OVER_STATE = 3;
-
 // Screen dimensions
 const X_RES = $var["screen_width"];
 const Y_RES = $var["screen_height"];
